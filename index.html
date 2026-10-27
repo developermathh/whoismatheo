@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>whoismatheo</title>
+<meta name="description" content="whoismatheo — somewhere on the internet.">
+<meta name="theme-color" content="#080808">
+<meta property="og:title" content="whoismatheo">
+<script>try{var h=document.documentElement;h.dataset.theme=localStorage.getItem("theme")||"dark";h.classList.add("js");if(localStorage.getItem("seen"))h.classList.add("quick")}catch(e){}</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="stars" aria-hidden="true"></div>
+<header class="nav intro-i" style="--d:.1s">
+  <nav aria-label="Main"><a href="#home" data-i18n="home"></a><a href="#about" data-i18n="about"></a><a href="#player" data-i18n="music"></a></nav>
+  <div class="ctrl">
+    <button id="theme" class="btn" data-i18n-label="theme" title="Theme"><svg class="ic sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="ic moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></svg></button>
+    <select id="lang" class="btn" data-i18n-label="language"><option value="en">EN · English</option><option value="es">ES · Español</option><option value="ru">RU · Русский</option><option value="de">DE · Deutsch</option><option value="fr">FR · Français</option></select>
+  </div>
+</header>
+<main>
+<section id="home" class="hero">
+  <svg class="orbit intro-i" style="--d:.35s" viewBox="-200 -100 400 200" aria-hidden="true"><g transform="rotate(-12)"><ellipse class="ring" pathLength="1" rx="170" ry="52"/><ellipse class="ring r2" rx="118" ry="34"/><circle r="3.5"><animateMotion dur="75s" repeatCount="indefinite" path="M170 0A170 52 0 1 1 -170 0A170 52 0 1 1 170 0"/></circle><circle r="2.5" opacity=".6"><animateMotion dur="110s" repeatCount="indefinite" path="M-118 0A118 34 0 1 0 118 0A118 34 0 1 0 -118 0"/></circle></g><path class="twinkle" d="M0-26Q3-3 26 0Q3 3 0 26Q-3 3-26 0Q-3-3 0-26Z"/></svg>
+  <p class="tag mono intro-i" style="--d:1s" data-i18n="hero"></p>
+</section>
+
+<section id="discord" class="card rv" aria-live="polite">
+  <div class="row mono small"><span><i class="dot on"></i> <span data-i18n="presence"></span></span><span><span id="conn-text"></span> <i id="conn-dot" class="dot"></i></span></div>
+  <div class="split">
+    <div class="who">
+      <div class="avatar"><img id="av" alt="" hidden><span id="av-fb">✦</span><i id="st-dot" class="dot st"></i></div>
+      <div><h2 id="name">—</h2><p class="muted mono small" id="status"></p><p class="muted mono small" id="activity"></p></div>
+    </div>
+    <div id="spotify" class="sp" hidden>
+      <p class="muted mono small" data-i18n="listening"></p>
+      <div class="who"><img id="sp-art" alt="" width="64" height="64"><div><p id="sp-song"></p><p class="muted mono small" id="sp-artist"></p><p class="muted mono small" id="sp-album"></p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="about" class="card rv">
+  <div class="row mono small"><span><i class="dot on"></i> <span data-i18n="about"></span></span></div>
+  <div class="split">
+    <!-- EDIT: your About Me text. Replace data-i18n="aboutText" with plain text or edit the dictionary in script.js -->
+    <p id="about-text" class="mono" data-i18n="aboutText"></p>
+    <div class="geo-wrap"><svg class="geo" viewBox="-100 -100 200 200" aria-hidden="true"><g class="o3"><circle class="g1" r="90"/></g><circle class="g2" r="62"/><circle class="g2" r="36"/><g fill="currentColor"><circle cx="62" r="2.6"><animateMotion dur="50s" repeatCount="indefinite" path="M62 0A62 62 0 1 1 -62 0A62 62 0 1 1 62 0"/></circle><circle cx="36" r="2.6"><animateMotion dur="32s" repeatCount="indefinite" path="M36 0A36 36 0 1 0 -36 0A36 36 0 1 0 36 0"/></circle><circle cx="90" r="2.6"><animateMotion dur="90s" repeatCount="indefinite" path="M90 0A90 90 0 1 1 -90 0A90 90 0 1 1 90 0"/></circle></g><path class="twinkle" d="M0-12Q1-1 12 0Q1 1 0 12Q-1 1-12 0Q-1-1 0-12Z" fill="currentColor"/></svg></div>
+  </div>
+</section>
+</main>
+
+<aside id="player" class="player intro-i" style="--d:1.3s" aria-label="Music">
+  <img id="cover" alt="" hidden>
+  <div class="meta"><p id="p-title"></p><p class="muted mono small" id="p-artist"></p><p class="mono small" id="p-status"></p></div>
+  <button id="play" class="btn round" disabled><svg class="ic i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><svg class="ic i-pause" viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg></button>
+  <label class="vol"><span class="sr" data-i18n="volume"></span><input id="volume" type="range" min="0" max="1" step=".01" value=".5" data-i18n-label="volume"></label>
+  <div class="prog"><span id="t-cur" class="mono small">0:00</span><input id="seek" type="range" min="0" max="1" step=".001" value="0" disabled data-i18n-label="seek"><span id="t-dur" class="mono small">0:00</span></div>
+</aside>
+
+<footer>
+  <p class="mono small muted" data-i18n="footer"></p>
+  <button id="secret" class="heart intro-i" style="--d:1.8s" data-i18n-label="secret"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20.5S4.5 15.900 2.800 11.100C1.600 7.700 4 4.500 7.200 4.500c2 0 3.700 1.100 4.800 2.800 1.100-1.700 2.800-2.800 4.800-2.800 3.200 0 5.600 3.200 4.400 6.600-1.700 4.800-9.200 9.400-9.200 9.400z"/></svg></button>
+</footer>
+
+<dialog id="letter" aria-labelledby="l-title">
+  <button id="close" class="btn" data-i18n-label="close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <h2 id="l-title" class="mono"><span data-i18n="letterFor"></span> iTake</h2>
+  <p id="l-body"></p>
+</dialog>
+<script src="script.js"></script>
+</body>
+</html>
