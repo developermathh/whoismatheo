@@ -122,8 +122,10 @@ $("#volume").oninput = e => { audio.volume = e.target.value; fill(e.target); }; 
 if (tk.src) audio.play().catch(failPlay);
 
 /* ===== Theme, language, letter ===== */
-$("#theme").onclick = () => { const h = document.documentElement, n = h.dataset.theme === "dark" ? "light" : "dark"; h.classList.add("tt"); h.dataset.theme = n;
-  try { localStorage.setItem("theme", n); } catch(e){} setTimeout(() => h.classList.remove("tt"), 800); metaTheme(); };
+let ttT; /* one shared timer: rapid clicks reset it instead of stacking */
+$("#theme").onclick = () => { const h = document.documentElement, n = h.dataset.theme === "dark" ? "light" : "dark";
+  clearTimeout(ttT); h.classList.add("tt"); h.dataset.theme = n; ttT = setTimeout(() => h.classList.remove("tt"), 280);
+  try { localStorage.setItem("theme", n); } catch(e){} metaTheme(); };
 const metaTheme = () => $("meta[name=theme-color]").content = document.documentElement.dataset.theme === "dark" ? "#080808" : "#F6F5F2";
 const lw = $("#langwrap"), lb = $("#lang"), lm = $("#lang-menu"), lo = [...lm.children]; let act = 0;
 function syncLang(){ $("#lang-cur").textContent = lang.toUpperCase(); lo.forEach(o => o.setAttribute("aria-selected", o.dataset.lang === lang)); }

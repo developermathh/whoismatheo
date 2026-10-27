@@ -86,7 +86,6 @@ nav a:hover,nav a:focus-visible,nav a:active{background-size:100% 1px}
 #theme{position:relative;padding:0}#theme .ic{position:absolute;inset:0;margin:auto;transition:transform .6s cubic-bezier(.2,.8,.2,1),opacity .35s;display:block!important}
 [data-theme=dark] .sun,[data-theme=light] .moon{opacity:0;transform:rotate(-80deg) scale(.4)}
 [data-theme=dark] .moon,[data-theme=light] .sun{opacity:1;transform:none}
-html.tt *,html.tt ::before{transition:background-color .6s,color .6s,border-color .6s,fill .6s,stroke .6s,box-shadow .6s!important}
 /* presence */
 .swap{display:inline-block;animation:sw .5s cubic-bezier(.2,.8,.2,1) both}.meta .swap,#name.swap,#activity.swap{display:block}
 @keyframes sw{from{opacity:0;transform:translateY(5px);filter:blur(3px)}}
@@ -145,3 +144,25 @@ footer p{width:fit-content;margin:0 auto}
 /* About Me text block */
 #about-text h3{font-weight:400;font-size:1.05rem;color:var(--tx);margin-bottom:1rem}
 #about-text p+p{margin-top:.9rem}#about-text .about-close{margin-top:1.4rem;color:var(--mu);opacity:.8}
+
+/* ===== Compact layout (hero + cards) ===== */
+.hero{min-height:0;gap:.5rem;padding:.1rem 0 .5rem}
+.orbit{width:min(280px,70vw)}
+.tag{font-size:.8rem;letter-spacing:.14em;line-height:1.5}
+#about-text{min-height:0}
+@media(max-width:400px){.nav{padding:.7rem 1rem}nav{gap:.9rem}nav a{font-size:.92rem}}
+@media(max-width:767px){
+ main{padding:0 1rem}
+ .card{margin:.75rem 0;padding:1rem}.row{margin-bottom:.75rem}.split{gap:.9rem}
+ #about-text{padding-bottom:.9rem}#about-text h3{margin-bottom:.7rem}#about-text p+p{margin-top:.7rem}#about-text .about-close{margin-top:1rem}
+ .geo{width:min(168px,56%)}
+}
+@media(min-width:768px){.hero{padding:1.5rem 0 1rem;gap:1rem}.orbit{width:min(400px,50vw)}.tag{font-size:.9rem;letter-spacing:.2em}}
+
+/* ===== Theme switch: short, light, compositor-friendly ===== */
+html.tt{--tt:.2s}
+@media(prefers-reduced-motion:reduce){html.tt{--tt:.08s}}
+html.tt body,html.tt .card,html.tt .btn,html.tt .player,html.tt dialog,html.tt .tag,html.tt .muted,html.tt #about-text,html.tt #about-text h3,html.tt footer p,html.tt .heart,html.tt nav a,html.tt .orbit,html.tt .geo,html.tt .geo-wrap{transition:background-color var(--tt) ease-out,color var(--tt) ease-out,border-color var(--tt) ease-out!important}
+.player{-webkit-backdrop-filter:none;backdrop-filter:none;background:color-mix(in srgb,var(--card) 95%,transparent)}
+#theme .ic{transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .2s}
+.btn{touch-action:manipulation}
