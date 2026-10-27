@@ -1,6 +1,6 @@
 /* ===== CONFIG: edit here ===== */
 const CONFIG = {
-  discordUserId: "",          // your numeric Discord ID (join discord.gg/lanyard so Lanyard can see you)
+  discordUserId: "1356268956398387423", // string, never a number (Discord IDs exceed JS integer precision)          // your numeric Discord ID (join discord.gg/lanyard so Lanyard can see you)
   track: { src: "", title: "", artist: "", cover: "" }, // e.g. src:"audio/song.mp3"
   dedicationMessage: ""       // your letter for iTake; empty = neutral placeholder
 };
@@ -25,7 +25,11 @@ const T = {
  offline:["offline","desconectado","не в сети","offline","hors ligne"],
  noActivity:["no current activity","sin actividad actual","нет активности","keine aktuelle Aktivität","aucune activité"],
  listening:["listening to spotify","escuchando spotify","слушает spotify","hört spotify","écoute spotify"],
- aboutText:["Write something about yourself here.","Escribe algo sobre ti aquí.","Напишите здесь что-нибудь о себе.","Schreibe hier etwas über dich.","Écris quelque chose sur toi ici."],
+ aboutTitle:["a bit of everything, I guess.","un poco de todo, supongo.","понемногу обо всём, наверное.","ein bisschen von allem, schätze ich.","un peu de tout, je suppose."],
+ aboutP1:["I don’t always know what I’m doing, but I almost always end up finding something interesting.","No siempre sé qué estoy haciendo, pero casi siempre termino encontrando algo interesante.","Я не всегда понимаю, что делаю, но почти всегда в итоге нахожу что-нибудь интересное.","Ich weiß nicht immer, was ich gerade tue, aber fast immer finde ich am Ende etwas Interessantes.","Je ne sais pas toujours ce que je fais, mais je finis presque toujours par trouver quelque chose d’intéressant."],
+ aboutP2:["I like ideas that appear out of nowhere, conversations that drag on for no reason, and those small things that make an ordinary day feel different.","Me gustan las ideas que aparecen de la nada, las conversaciones que se alargan sin motivo y esas pequeñas cosas que hacen que un día normal sea diferente.","Мне нравятся идеи, которые появляются из ниоткуда, разговоры, которые затягиваются без всякой причины, и те маленькие мелочи, которые делают обычный день особенным.","Ich mag Ideen, die aus dem Nichts auftauchen, Gespräche, die sich ohne Grund in die Länge ziehen, und diese kleinen Dinge, die einen normalen Tag anders machen.","J’aime les idées qui surgissent de nulle part, les conversations qui s’éternisent sans raison, et ces petites choses qui rendent un jour ordinaire différent."],
+ aboutClose:["Under construction, like everyone else.","En construcción, como todo el mundo.","В разработке, как и все мы.","Im Aufbau, wie alle anderen auch.","En construction, comme tout le monde."],
+ hint:["no presence received — join discord.gg/lanyard","sin datos de presencia — únete a discord.gg/lanyard","нет данных о статусе — вступите на discord.gg/lanyard","keine Präsenzdaten — tritt discord.gg/lanyard bei","aucune donnée de présence — rejoins discord.gg/lanyard"],
  seek:["Seek","Buscar","Перемотка","Suchen","Position"],
  play:["Play","Reproducir","Играть","Abspielen","Lecture"],
  pause:["Pause","Pausa","Пауза","Pause","Pause"],
@@ -54,7 +58,7 @@ function renderPresence(){
   const st = d ? d.discord_status : "offline";
   $("#st-dot").dataset.s = st;
   setText($("#status"), d ? tr(st) : tr(conn === "notConfigured" ? "notConfigured" : conn === "live" ? "offline" : conn));
-  if (!d){ setText($("#name"), "—"); setText($("#activity"), ""); $("#av").hidden = true; $("#av-fb").hidden = false; sp.hidden = true; return; }
+  if (!d){ setText($("#name"), "—"); setText($("#activity"), conn === "unavailable" ? tr("hint") : ""); $("#av").hidden = true; $("#av-fb").hidden = false; sp.hidden = true; return; }
   const u = d.discord_user || {};
   setText($("#name"), u.global_name || u.display_name || u.username || "—");
   if (u.avatar){ $("#av").src = `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128`; $("#av").hidden = false; $("#av-fb").hidden = true; }
@@ -62,27 +66,33 @@ function renderPresence(){
   const act = (d.activities || []).find(a => a.type !== 4 && a.id !== "spotify:1");
   setText($("#activity"), act ? act.name + (act.details ? " — " + act.details : "") : tr("noActivity"));
   if (d.listening_to_spotify && d.spotify){
-    $("#sp-art").src = d.spotify.album_art_url || ""; $("#sp-song").textContent = d.spotify.song;
+    const art = d.spotify.album_art_url; $("#sp-art").style.display = art ? "" : "none"; if (art && $("#sp-art").getAttribute("src") !== art) $("#sp-art").src = art; $("#sp-song").textContent = d.spotify.song;
     $("#sp-artist").textContent = d.spotify.artist; $("#sp-album").textContent = d.spotify.album; sp.hidden = false;
   } else sp.hidden = true;
 }
-let ws, hb, rt, wt, tries = 0, everLive = false;
+let ws, hb, rt, wt, tries = 0, everLive = false, stopped = false;
 function connect(){
-  if (!CONFIG.discordUserId || (ws && ws.readyState < 2)) return;
-  clearTimeout(rt); conn = everLive ? "reconnecting" : "connecting"; renderPresence();
+  if (!CONFIG.discordUserId || stopped || (ws && ws.readyState < 2)) return;
+  clearTimeout(rt); clearTimeout(wt);
+  if (everLive) conn = "reconnecting"; else if (!tries) conn = "connecting"; /* after a failure keep "unavailable" instead of flashing "connecting" */
+  renderPresence();
   let s;
   try { s = ws = new WebSocket("wss://api.lanyard.rest/socket"); } catch(e){ return retry(); }
+  /* no presence within 10 s (stuck handshake, or ID not monitored by Lanyard) -> say so instead of loading forever */
+  wt = setTimeout(() => { if (conn !== "live"){ conn = pres ? "reconnecting" : "unavailable"; renderPresence(); } }, 10000);
   s.onmessage = e => { if (s !== ws) return; let m; try { m = JSON.parse(e.data); } catch(_){ return; }
     if (m.op === 1){ clearInterval(hb); hb = setInterval(() => s.readyState === 1 && s.send('{"op":3}'), m.d.heartbeat_interval);
-      s.send(JSON.stringify({ op:2, d:{ subscribe_to_id: CONFIG.discordUserId } }));
-      wt = setTimeout(() => { if (!pres){ conn = "unavailable"; renderPresence(); } }, 8000); }
+      s.send(JSON.stringify({ op:2, d:{ subscribe_to_id: CONFIG.discordUserId } })); }
     if (m.op === 0 && m.d && m.d.discord_user){ clearTimeout(wt); pres = m.d; conn = "live"; everLive = true; tries = 0; renderPresence(); } };
-  s.onclose = () => { if (s !== ws) return; clearInterval(hb); clearTimeout(wt); retry(); };
+  s.onclose = () => { if (s !== ws || stopped) return; clearInterval(hb); clearTimeout(wt); retry(); };
   s.onerror = () => s.close();
 }
 function retry(){ conn = everLive ? "reconnecting" : "unavailable"; renderPresence(); clearTimeout(rt); rt = setTimeout(connect, Math.min(30000, 2000 * ++tries)); }
 addEventListener("online", () => { tries = 0; connect(); });
-$("#sp-art").onerror = e => e.target.style.visibility = "hidden";
+addEventListener("pagehide", () => { stopped = true; clearTimeout(rt); clearTimeout(wt); clearInterval(hb); if (ws) ws.close(); });
+addEventListener("pageshow", e => { if (e.persisted){ stopped = false; tries = 0; connect(); } });
+$("#sp-art").onerror = e => e.target.style.display = "none";
+$("#av").onerror = () => { $("#av").hidden = true; $("#av-fb").hidden = false; };
 
 /* ===== Player ===== */
 const audio = new Audio(); audio.loop = true; audio.volume = .5; audio.preload = "metadata";
@@ -115,9 +125,26 @@ if (tk.src) audio.play().catch(failPlay);
 $("#theme").onclick = () => { const h = document.documentElement, n = h.dataset.theme === "dark" ? "light" : "dark"; h.classList.add("tt"); h.dataset.theme = n;
   try { localStorage.setItem("theme", n); } catch(e){} setTimeout(() => h.classList.remove("tt"), 800); metaTheme(); };
 const metaTheme = () => $("meta[name=theme-color]").content = document.documentElement.dataset.theme === "dark" ? "#080808" : "#F6F5F2";
-$("#lang").onchange = e => { lang = e.target.value; localStorage.setItem("lang", lang); applyLang(); };
+const lw = $("#langwrap"), lb = $("#lang"), lm = $("#lang-menu"), lo = [...lm.children]; let act = 0;
+function syncLang(){ $("#lang-cur").textContent = lang.toUpperCase(); lo.forEach(o => o.setAttribute("aria-selected", o.dataset.lang === lang)); }
+function setLang(c){ if (!LANGS.includes(c)) return; lang = c; try { localStorage.setItem("lang", lang); } catch(e){} applyLang(); }
+function mark(i){ act = (i + lo.length) % lo.length; lo.forEach((o, j) => o.classList.toggle("act", j === act)); lm.setAttribute("aria-activedescendant", lo[act].id); }
+function openLang(){ lw.classList.add("open"); lb.setAttribute("aria-expanded", "true"); lm.style.left = lm.style.right = "";
+  const r = lm.getBoundingClientRect(); if (r.left < 8){ lm.style.left = "0"; lm.style.right = "auto"; }
+  mark(LANGS.indexOf(lang)); lm.focus({preventScroll:true}); }
+function closeLang(back){ if (!lw.classList.contains("open")) return; lw.classList.remove("open"); lb.setAttribute("aria-expanded", "false"); if (back) lb.focus(); }
+lb.onclick = () => lw.classList.contains("open") ? closeLang(true) : openLang();
+lb.addEventListener("keydown", e => { if (e.key === "ArrowDown" || e.key === "ArrowUp"){ e.preventDefault(); openLang(); } });
+lo.forEach(o => o.addEventListener("click", () => { setLang(o.dataset.lang); closeLang(true); }));
+lm.addEventListener("keydown", e => { const k = e.key;
+  if (k === "ArrowDown") mark(act + 1); else if (k === "ArrowUp") mark(act - 1); else if (k === "Home") mark(0); else if (k === "End") mark(lo.length - 1);
+  else if (k === "Enter" || k === " "){ setLang(lo[act].dataset.lang); closeLang(true); }
+  else if (k === "Escape"){ e.stopPropagation(); closeLang(true); } else if (k === "Tab"){ closeLang(false); return; } else return;
+  e.preventDefault(); });
+document.addEventListener("pointerdown", e => { if (!lw.contains(e.target)) closeLang(false); });
+lm.addEventListener("focusout", e => { if (!lw.contains(e.relatedTarget)) closeLang(false); });
 function applyLang(){
-  document.documentElement.lang = lang; $("#lang").value = lang;
+  document.documentElement.lang = lang; syncLang();
   document.querySelectorAll("[data-i18n]").forEach(e => e.textContent = tr(e.dataset.i18n));
   document.querySelectorAll("[data-i18n-label]").forEach(e => e.setAttribute("aria-label", tr(e.dataset.i18nLabel)));
   $("#l-body").textContent = CONFIG.dedicationMessage || tr("placeholder");
