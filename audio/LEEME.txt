@@ -1,0 +1,2 @@
+Place your authorized audio file here as: the-kill-2.mp3
+(or change CONFIG.track.src in script.js)

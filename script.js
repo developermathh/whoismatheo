@@ -1,7 +1,7 @@
 /* ===== CONFIG: edit here ===== */
 const CONFIG = {
   discordUserId: "1356268956398387423", // string, never a number (Discord IDs exceed JS integer precision)          // your numeric Discord ID (join discord.gg/lanyard so Lanyard can see you)
-  track: { src: "", title: "", artist: "", cover: "" }, // e.g. src:"audio/song.mp3"
+  track: { src: "audio/the-kill-2.mp3", /* add your own authorized file at this path */ title: "The Kill 2", artist: "Lex Amarni & 2MuchMotion", cover: "" /* empty = fetched from Spotify oEmbed if reachable */, spotifyUrl: "https://open.spotify.com/track/1cvh28dmSvufqFqJe9LE3H" },
   dedicationMessage: ""       // your letter for iTake; empty = neutral placeholder
 };
 /* ===== Translations: [en, es, ru, de, fr] ===== */
@@ -43,6 +43,12 @@ const T = {
  placeholder:["Your message goes here.","Tu mensaje va aquí.","Ваше сообщение здесь.","Deine Nachricht kommt hierher.","Ton message va ici."],
  close:["Close","Cerrar","Закрыть","Schließen","Fermer"],
  secret:["Open the letter for iTake","Abrir la carta para iTake","Открыть письмо для iTake","Brief für iTake öffnen","Ouvrir la lettre pour iTake"],
+ mute:["Mute music", "Silenciar música", "Отключить звук музыки", "Musik stummschalten", "Couper le son de la musique"],
+ unmute:["Turn sound on", "Activar sonido", "Включить звук", "Ton einschalten", "Activer le son"],
+ nothingPlaying:["nothing playing right now", "nada sonando ahora", "сейчас ничего не играет", "gerade wird nichts abgespielt", "rien en lecture pour le moment"],
+ history:["recently played", "escuchado recientemente", "недавно прослушано", "zuletzt gehört", "écouté récemment"],
+ openSpotify:["Open in Spotify", "Abrir en Spotify", "Открыть в Spotify", "In Spotify öffnen", "Ouvrir dans Spotify"],
+ loading:["loading", "cargando", "загрузка", "lädt", "chargement"],
  footer:["somewhere on the internet","en algún lugar de internet","где-то в интернете","irgendwo im Internet","quelque part sur internet"]
 };
 const $ = s => document.querySelector(s);
@@ -52,23 +58,31 @@ let conn = CONFIG.discordUserId ? "connecting" : "notConfigured", pres = null;
 let playerState = { blocked:false, error:false };
 
 function setText(el, t){ if (el.textContent === t) return; el.textContent = t; if (!el.dataset.rdy){ el.dataset.rdy = 1; return; } el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); }
+let avBad = "", spT, histT;
 function renderPresence(){
   setText($("#conn-text"), tr(conn)); $("#conn-dot").dataset.s = conn; $("#discord").dataset.c = conn;
-  const d = pres, sp = $("#spotify");
-  const st = d ? d.discord_status : "offline";
+  const d = pres, u = (d && d.discord_user) || {}, st = d ? d.discord_status : "offline";
   $("#st-dot").dataset.s = st;
-  setText($("#status"), d ? tr(st) : tr(conn === "notConfigured" ? "notConfigured" : conn === "live" ? "offline" : conn));
-  if (!d){ setText($("#name"), "—"); setText($("#activity"), conn === "unavailable" ? tr("hint") : ""); $("#av").hidden = true; $("#av-fb").hidden = false; sp.hidden = true; return; }
-  const u = d.discord_user || {};
-  setText($("#name"), u.global_name || u.display_name || u.username || "—");
-  if (u.avatar){ $("#av").src = `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128`; $("#av").hidden = false; $("#av-fb").hidden = true; }
-  else { $("#av").hidden = true; $("#av-fb").hidden = false; }
-  const act = (d.activities || []).find(a => a.type !== 4 && a.id !== "spotify:1");
-  setText($("#activity"), act ? act.name + (act.details ? " — " + act.details : "") : tr("noActivity"));
-  if (d.listening_to_spotify && d.spotify){
-    const art = d.spotify.album_art_url; $("#sp-art").style.display = art ? "" : "none"; if (art && $("#sp-art").getAttribute("src") !== art) $("#sp-art").src = art; $("#sp-song").textContent = d.spotify.song;
-    $("#sp-artist").textContent = d.spotify.artist; $("#sp-album").textContent = d.spotify.album; sp.hidden = false;
-  } else sp.hidden = true;
+  setText($("#status"), d ? tr(st) : tr(conn === "live" ? "offline" : conn));
+  const nm = d ? (u.global_name || u.display_name || u.username || "—") : "—"; setText($("#name"), nm);
+  const un = d && u.username && u.username !== nm ? "@" + u.username : ""; setText($("#uname"), un); $("#uname").hidden = !un;
+  const act = d && (d.activities || []).find(a => a.type !== 4 && a.id !== "spotify:1");
+  setText($("#activity"), !d ? (conn === "unavailable" ? tr("hint") : "") : act ? act.name + (act.details ? " — " + act.details : "") : tr("noActivity"));
+  const av = $("#av"), src = d && u.id && u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : "";
+  if (src && src !== avBad){ if (av.getAttribute("src") !== src) av.src = src; av.hidden = false; $("#av-fb").hidden = true; } else { av.hidden = true; $("#av-fb").hidden = false; }
+  renderSpotify();
+}
+function renderSpotify(){
+  const s = pres && pres.listening_to_spotify && pres.spotify, box = $("#spotify"), song = $("#sp-song"), img = $("#sp-art");
+  box.classList.toggle("idle", !s);
+  setText($("#sp-label"), s ? tr("listening") : conn === "live" ? tr("nothingPlaying") : "—");
+  setText(song, s ? s.song || "—" : ""); if (s && s.track_id) song.href = "https://open.spotify.com/track/" + encodeURIComponent(s.track_id); else song.removeAttribute("href");
+  setText($("#sp-artist"), s ? (s.artist || "").replace(/;\s*/g, ", ") : ""); setText($("#sp-album"), s ? s.album || "" : "");
+  const art = s && s.album_art_url; img.style.display = art ? "" : "none"; if (art && img.getAttribute("src") !== art) img.src = art;
+  clearInterval(spT); const t = s && s.timestamps, ok = t && t.start && t.end && t.end > t.start, pr = $(".sp-prog"); pr.hidden = !ok; if (!ok) return;
+  const dur = t.end - t.start, upd = () => { const el = Math.min(Math.max(Date.now() - t.start, 0), dur); /* clamped: never negative, never above duration */
+    $("#sp-cur").textContent = fmt(el / 1000); $("#sp-dur").textContent = fmt(dur / 1000); $("#sp-bar").style.transform = `scaleX(${el / dur})`; if (el >= dur) clearInterval(spT); };
+  upd(); spT = setInterval(upd, 1000);
 }
 let ws, hb, rt, wt, tries = 0, everLive = false, stopped = false;
 function connect(){
@@ -89,37 +103,48 @@ function connect(){
 }
 function retry(){ conn = everLive ? "reconnecting" : "unavailable"; renderPresence(); clearTimeout(rt); rt = setTimeout(connect, Math.min(30000, 2000 * ++tries)); }
 addEventListener("online", () => { tries = 0; connect(); });
-addEventListener("pagehide", () => { stopped = true; clearTimeout(rt); clearTimeout(wt); clearInterval(hb); if (ws) ws.close(); });
+addEventListener("pagehide", () => { clearInterval(spT); clearInterval(histT); stopped = true; clearTimeout(rt); clearTimeout(wt); clearInterval(hb); if (ws) ws.close(); });
 addEventListener("pageshow", e => { if (e.persisted){ stopped = false; tries = 0; connect(); } });
 $("#sp-art").onerror = e => e.target.style.display = "none";
-$("#av").onerror = () => { $("#av").hidden = true; $("#av-fb").hidden = false; };
+$("#av").onerror = e => { avBad = e.target.getAttribute("src"); e.target.hidden = true; $("#av-fb").hidden = false; };
 
-/* ===== Player ===== */
-const audio = new Audio(); audio.loop = true; audio.volume = .5; audio.preload = "metadata";
-const tk = CONFIG.track, pl = $("#player"), seek = $("#seek"); let seeking = false;
+/* ===== Player (single Audio instance; language/theme changes never touch it) ===== */
+const store = { get: k => { try { return localStorage.getItem(k); } catch(e){ return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch(e){} } };
+const audio = new Audio(); audio.loop = true; audio.preload = "metadata";
+const v0 = parseFloat(store.get("vol")); audio.volume = v0 >= 0 && v0 <= 1 ? v0 : .5; audio.muted = store.get("muted") === "1";
+let lastVol = audio.volume || .5;
+const tk = CONFIG.track, pl = $("#player"), seek = $("#seek"), vol = $("#volume"), mute = $("#mute"); let seeking = false;
 const fmt = n => isFinite(n) ? Math.floor(n / 60) + ":" + String(Math.floor(n % 60)).padStart(2, "0") : "0:00";
 const fill = el => el.style.setProperty("--p", (el.value - el.min) / (el.max - el.min) * 100 + "%");
+const usable = () => !!tk.src && !playerState.error;
+const isPlaying = () => !audio.paused && audio.readyState > 2 && !audio.error;
 const failPlay = e => { if (e && e.name === "NotAllowedError") playerState.blocked = true; else playerState.error = true; renderPlayer(); };
-if (tk.src){ audio.src = tk.src; pl.classList.add("has-src"); $("#play").disabled = false;
+if (tk.src){ audio.src = tk.src;
   audio.onerror = () => { playerState.error = true; renderPlayer(); };
   audio.onplaying = () => { playerState.error = false; playerState.blocked = false; renderPlayer(); }; }
-audio.onplay = audio.onpause = () => renderPlayer();
+["play","pause","waiting","canplay","ended"].forEach(e => audio.addEventListener(e, renderPlayer));
 audio.onloadedmetadata = () => { seek.disabled = !isFinite(audio.duration); $("#t-dur").textContent = fmt(audio.duration); };
 audio.ontimeupdate = () => { if (isFinite(audio.duration) && !seeking){ seek.value = audio.currentTime / audio.duration; fill(seek); } $("#t-cur").textContent = fmt(audio.currentTime); };
 seek.oninput = () => { seeking = true; fill(seek); $("#t-cur").textContent = fmt(seek.value * audio.duration); };
 seek.onchange = () => { audio.currentTime = seek.value * audio.duration; seeking = false; };
+audio.addEventListener("volumechange", () => { vol.value = audio.volume; fill(vol); store.set("vol", audio.volume); store.set("muted", audio.muted ? "1" : "0"); renderMute(); });
+vol.oninput = e => { audio.volume = +e.target.value; if (audio.volume > 0){ lastVol = audio.volume; audio.muted = false; } };
+mute.onclick = () => { if (audio.muted || audio.volume === 0){ audio.muted = false; if (audio.volume < .05) audio.volume = lastVol; } else { lastVol = audio.volume; audio.muted = true; } };
+function renderMute(){ const m = audio.muted || audio.volume === 0, l = tr(m ? "unmute" : "mute"); mute.dataset.muted = m; mute.setAttribute("aria-label", l); mute.title = l; mute.disabled = !usable(); }
 function renderPlayer(){
-  setText($("#p-title"), tk.title || tr("noTrack")); setText($("#p-artist"), tk.artist || "");
+  const tl = $("#p-title"); setText(tl, tk.title || tr("noTrack")); if (tk.spotifyUrl && tk.title) tl.href = tk.spotifyUrl; else tl.removeAttribute("href");
+  setText($("#p-artist"), tk.artist || "");
   $("#cover").hidden = !tk.cover; if (tk.cover && $("#cover").getAttribute("src") !== tk.cover) $("#cover").src = tk.cover;
-  const playing = !audio.paused;
-  pl.classList.toggle("playing", playing); pl.classList.toggle("blocked", playerState.blocked && !playing);
-  $("#play").setAttribute("aria-label", tr(playing ? "pause" : "play"));
-  setText($("#p-status"), !tk.src ? "" : playerState.error ? tr("loadError") : playing ? tr("playing") : playerState.blocked ? tr("tapToPlay") : tr("paused"));
+  pl.classList.toggle("has-src", usable()); pl.classList.toggle("playing", !audio.paused); pl.classList.toggle("blocked", playerState.blocked && audio.paused);
+  $("#play").disabled = !usable(); $("#play").setAttribute("aria-label", tr(audio.paused ? "play" : "pause"));
+  setText($("#p-status"), !tk.src ? "" : playerState.error ? tr("loadError") : isPlaying() ? tr("playing") : playerState.blocked ? tr("tapToPlay") : audio.paused ? tr("paused") : tr("loading"));
+  renderMute();
 }
 $("#cover").onerror = e => e.target.hidden = true;
-$("#play").onclick = () => { if (audio.paused) audio.play().catch(failPlay); else audio.pause(); };
-$("#volume").oninput = e => { audio.volume = e.target.value; fill(e.target); }; fill($("#volume"));
-if (tk.src) audio.play().catch(failPlay);
+$("#play").onclick = () => { if (audio.paused){ store.set("music", "on"); audio.play().catch(failPlay); } else { store.set("music", "off"); audio.pause(); } };
+fill(vol); vol.value = audio.volume; fill(vol);
+if (tk.src && store.get("music") !== "off") audio.play().catch(failPlay); /* browsers may block this: then the tap-to-play prompt is shown */
+if (!tk.cover && tk.spotifyUrl) fetch("https://open.spotify.com/oembed?url=" + encodeURIComponent(tk.spotifyUrl)).then(r => r.ok ? r.json() : Promise.reject()).then(j => { if (j && /^https:\/\//.test(j.thumbnail_url || "")){ tk.cover = j.thumbnail_url; renderPlayer(); } }).catch(() => {});
 
 /* ===== Theme, language, letter ===== */
 let ttT; /* one shared timer: rapid clicks reset it instead of stacking */
@@ -149,6 +174,7 @@ function applyLang(){
   document.documentElement.lang = lang; syncLang();
   document.querySelectorAll("[data-i18n]").forEach(e => e.textContent = tr(e.dataset.i18n));
   document.querySelectorAll("[data-i18n-label]").forEach(e => e.setAttribute("aria-label", tr(e.dataset.i18nLabel)));
+  document.querySelectorAll("[data-i18n-title]").forEach(e => e.title = tr(e.dataset.i18nTitle));
   $("#l-body").textContent = CONFIG.dedicationMessage || tr("placeholder");
   renderPresence(); renderPlayer();
 }
@@ -176,4 +202,19 @@ document.querySelectorAll(".rv").forEach(e => io ? io.observe(e) : e.classList.a
 if (still) document.querySelectorAll("animateMotion").forEach(a => a.remove());
 document.addEventListener("visibilitychange", () => { const h = document.hidden; document.documentElement.classList.toggle("paused", h); document.querySelectorAll("svg").forEach(v => h ? v.pauseAnimations() : v.unpauseAnimations()); });
 try { localStorage.setItem("seen", "1"); } catch(e){}
+/* ===== Recently played (real data only: served by /api/recent on Vercel; section stays hidden otherwise) ===== */
+const hist = $("#hist"), histSec = $("#history"); let histKey = "";
+function renderHistory(items){
+  const key = items.map(i => i.id).join(","); if (key === histKey) return; histKey = key;
+  hist.replaceChildren(...items.map(i => { const li = document.createElement("li"), a = document.createElement("a"), t = document.createElement("strong"), r = document.createElement("span");
+    a.href = i.url; a.target = "_blank"; a.rel = "noopener"; a.setAttribute("data-i18n-title", "openSpotify"); a.title = tr("openSpotify");
+    if (/^https:\/\//.test(i.cover || "")){ const im = document.createElement("img"); im.src = i.cover; im.alt = ""; im.width = im.height = 112; im.loading = "lazy"; im.decoding = "async"; a.appendChild(im); } else a.appendChild(document.createElement("div")).className = "ph";
+    t.textContent = i.title; r.textContent = i.artists || ""; a.append(t, r); li.appendChild(a); return li; }));
+  histSec.hidden = !items.length;
+}
+async function loadHistory(){ if (document.hidden) return;
+  try { const r = await fetch("/api/recent"); if (!r.ok) throw 0; const j = await r.json();
+    renderHistory(Array.isArray(j.items) ? j.items.filter(i => i && i.id && i.title && /^https:\/\/open\.spotify\.com\//.test(i.url || "")).slice(0, 10) : []);
+  } catch(e){ /* keep last good data, or stay hidden: never show placeholders */ } }
+loadHistory(); histT = setInterval(loadHistory, 180000);
 metaTheme(); applyLang(); connect();
