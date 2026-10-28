@@ -47,13 +47,27 @@ const T = {
  unmute:["Turn sound on", "Activar sonido", "Включить звук", "Ton einschalten", "Activer le son"],
  nothingPlaying:["nothing playing right now", "nada sonando ahora", "сейчас ничего не играет", "gerade wird nichts abgespielt", "rien en lecture pour le moment"],
  history:["recently played", "escuchado recientemente", "недавно прослушано", "zuletzt gehört", "écouté récemment"],
+ historyEmpty:["no recent plays to show yet", "aún no hay reproducciones recientes que mostrar", "пока нет недавних прослушиваний", "noch keine zuletzt gehörten Titel", "aucune écoute récente à afficher pour le moment"],
+ historyError:["recent plays are unavailable right now", "las reproducciones recientes no están disponibles ahora", "недавние прослушивания сейчас недоступны", "zuletzt Gehörtes ist gerade nicht verfügbar", "les écoutes récentes sont indisponibles pour le moment"],
  openSpotify:["Open in Spotify", "Abrir en Spotify", "Открыть в Spotify", "In Spotify öffnen", "Ouvrir dans Spotify"],
  loading:["loading", "cargando", "загрузка", "lädt", "chargement"],
  footer:["somewhere on the internet","en algún lugar de internet","где-то в интернете","irgendwo im Internet","quelque part sur internet"]
 };
 const $ = s => document.querySelector(s);
-let lang = localStorage.getItem("lang"); if (!LANGS.includes(lang)) lang = "en";
+/* storage can throw (private mode, in-app browsers, blocked cookies): every access goes through this guard */
+const store = { get: k => { try { return localStorage.getItem(k); } catch(e){ return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch(e){} } };
+let lang = store.get("lang"); if (!LANGS.includes(lang)) lang = "en";
 const tr = k => (T[k] || [])[LANGS.indexOf(lang)] || k;
+/* Static texts (nav, About Me, labels) and scroll-reveal are set up FIRST, so they cannot be blocked by anything below (audio, Lanyard, Spotify, storage) */
+function applyStaticText(){
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(e => e.textContent = tr(e.dataset.i18n));
+  document.querySelectorAll("[data-i18n-label]").forEach(e => e.setAttribute("aria-label", tr(e.dataset.i18nLabel)));
+  document.querySelectorAll("[data-i18n-title]").forEach(e => e.title = tr(e.dataset.i18nTitle));
+}
+applyStaticText();
+const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } }), {threshold:.12}) : null;
+document.querySelectorAll(".rv").forEach(e => io ? io.observe(e) : e.classList.add("in"));
 let conn = CONFIG.discordUserId ? "connecting" : "notConfigured", pres = null;
 let playerState = { blocked:false, error:false };
 
@@ -104,12 +118,11 @@ function connect(){
 function retry(){ conn = everLive ? "reconnecting" : "unavailable"; renderPresence(); clearTimeout(rt); rt = setTimeout(connect, Math.min(30000, 2000 * ++tries)); }
 addEventListener("online", () => { tries = 0; connect(); });
 addEventListener("pagehide", () => { clearInterval(spT); clearInterval(histT); stopped = true; clearTimeout(rt); clearTimeout(wt); clearInterval(hb); if (ws) ws.close(); });
-addEventListener("pageshow", e => { if (e.persisted){ stopped = false; tries = 0; connect(); } });
+addEventListener("pageshow", e => { if (e.persisted){ stopped = false; tries = 0; connect(); startHistory(); } });
 $("#sp-art").onerror = e => e.target.style.display = "none";
 $("#av").onerror = e => { avBad = e.target.getAttribute("src"); e.target.hidden = true; $("#av-fb").hidden = false; };
 
 /* ===== Player (single Audio instance; language/theme changes never touch it) ===== */
-const store = { get: k => { try { return localStorage.getItem(k); } catch(e){ return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch(e){} } };
 const audio = new Audio(); audio.loop = true; audio.preload = "metadata";
 const v0 = parseFloat(store.get("vol")); audio.volume = v0 >= 0 && v0 <= 1 ? v0 : .5; audio.muted = store.get("muted") === "1";
 let lastVol = audio.volume || .5;
@@ -171,12 +184,9 @@ lm.addEventListener("keydown", e => { const k = e.key;
 document.addEventListener("pointerdown", e => { if (!lw.contains(e.target)) closeLang(false); });
 lm.addEventListener("focusout", e => { if (!lw.contains(e.relatedTarget)) closeLang(false); });
 function applyLang(){
-  document.documentElement.lang = lang; syncLang();
-  document.querySelectorAll("[data-i18n]").forEach(e => e.textContent = tr(e.dataset.i18n));
-  document.querySelectorAll("[data-i18n-label]").forEach(e => e.setAttribute("aria-label", tr(e.dataset.i18nLabel)));
-  document.querySelectorAll("[data-i18n-title]").forEach(e => e.title = tr(e.dataset.i18nTitle));
+  syncLang(); applyStaticText();
   $("#l-body").textContent = CONFIG.dedicationMessage || tr("placeholder");
-  renderPresence(); renderPlayer();
+  renderPresence(); renderPlayer(); renderHistoryState();
 }
 const dlg = $("#letter");
 $("#secret").onclick = e => { const b = e.currentTarget; b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); dlg.showModal(); }; $("#close").onclick = () => dlg.close();
@@ -197,24 +207,33 @@ const par = () => { raf = 0; layers.forEach(({l, k}) => l.style.transform = `tra
 const req = () => raf || (raf = requestAnimationFrame(par));
 if (!still){ addEventListener("scroll", req, {passive:true});
   addEventListener("pointermove", e => { if (e.pointerType === "mouse"){ mx = e.clientX / innerWidth - .5; req(); } }, {passive:true}); }
-const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } }), {threshold:.12}) : null;
-document.querySelectorAll(".rv").forEach(e => io ? io.observe(e) : e.classList.add("in"));
 if (still) document.querySelectorAll("animateMotion").forEach(a => a.remove());
 document.addEventListener("visibilitychange", () => { const h = document.hidden; document.documentElement.classList.toggle("paused", h); document.querySelectorAll("svg").forEach(v => h ? v.pauseAnimations() : v.unpauseAnimations()); });
 try { localStorage.setItem("seen", "1"); } catch(e){}
-/* ===== Recently played (real data only: served by /api/recent on Vercel; section stays hidden otherwise) ===== */
-const hist = $("#hist"), histSec = $("#history"); let histKey = "";
-function renderHistory(items){
-  const key = items.map(i => i.id).join(","); if (key === histKey) return; histKey = key;
-  hist.replaceChildren(...items.map(i => { const li = document.createElement("li"), a = document.createElement("a"), t = document.createElement("strong"), r = document.createElement("span");
-    a.href = i.url; a.target = "_blank"; a.rel = "noopener"; a.setAttribute("data-i18n-title", "openSpotify"); a.title = tr("openSpotify");
-    if (/^https:\/\//.test(i.cover || "")){ const im = document.createElement("img"); im.src = i.cover; im.alt = ""; im.width = im.height = 112; im.loading = "lazy"; im.decoding = "async"; a.appendChild(im); } else a.appendChild(document.createElement("div")).className = "ph";
-    t.textContent = i.title; r.textContent = i.artists || ""; a.append(t, r); li.appendChild(a); return li; }));
-  histSec.hidden = !items.length;
+/* ===== Recently played: GET /api/recent (Vercel function). States: loading -> ok | empty | error. Real data only: never invented tracks ===== */
+const hist = $("#hist"), histSec = $("#history"), histMsg = $("#hist-msg"); let histKey = "", histState = "loading", histBusy = false;
+function renderHistoryState(){
+  const m = histState === "ok" ? "" : tr(histState === "loading" ? "loading" : histState === "empty" ? "historyEmpty" : "historyError");
+  histMsg.textContent = m; histMsg.hidden = !m; hist.hidden = histState !== "ok"; histSec.hidden = false;
 }
-async function loadHistory(){ if (document.hidden) return;
-  try { const r = await fetch("/api/recent"); if (!r.ok) throw 0; const j = await r.json();
-    renderHistory(Array.isArray(j.items) ? j.items.filter(i => i && i.id && i.title && /^https:\/\/open\.spotify\.com\//.test(i.url || "")).slice(0, 10) : []);
-  } catch(e){ /* keep last good data, or stay hidden: never show placeholders */ } }
-loadHistory(); histT = setInterval(loadHistory, 180000);
-metaTheme(); applyLang(); connect();
+function renderHistory(items){
+  histState = items.length ? "ok" : "empty";
+  const key = items.map(i => i.id + "@" + (i.playedAt || "")).join(","); /* same track played twice = two plays */
+  if (key !== histKey){ histKey = key;
+    hist.replaceChildren(...items.map(i => { const li = document.createElement("li"), a = document.createElement("a"), t = document.createElement("strong"), r = document.createElement("span");
+      a.href = i.url; a.target = "_blank"; a.rel = "noopener"; a.setAttribute("data-i18n-title", "openSpotify"); a.title = tr("openSpotify");
+      if (/^https:\/\//.test(i.cover || "")){ const im = document.createElement("img"); im.src = i.cover; im.alt = ""; im.width = im.height = 112; im.loading = "lazy"; im.decoding = "async"; a.appendChild(im); } else a.appendChild(document.createElement("div")).className = "ph";
+      t.textContent = i.title; r.textContent = i.artists || ""; a.append(t, r); li.appendChild(a); return li; })); }
+  renderHistoryState();
+}
+async function loadHistory(){ if (document.hidden || histBusy) return; histBusy = true;
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 12000);
+  try { const r = await fetch("/api/recent", { signal: ctl.signal, headers: { Accept: "application/json" } }); if (!r.ok) throw 0; const j = await r.json();
+    if (!j || !Array.isArray(j.items)) throw 0;
+    renderHistory(j.items.filter(i => i && i.id && i.title && /^https:\/\/open\.spotify\.com\//.test(i.url || "")).slice(0, 10));
+  } catch(e){ if (histState !== "ok"){ histState = "error"; renderHistoryState(); } /* a transient failure keeps the last good carousel */ }
+  finally { clearTimeout(to); histBusy = false; } }
+document.addEventListener("visibilitychange", () => { if (!document.hidden && histState !== "ok") loadHistory(); }); /* a tab opened in the background used to wait 3 minutes */
+const startHistory = () => { clearInterval(histT); loadHistory(); histT = setInterval(loadHistory, 180000); };
+renderHistoryState(); startHistory();
+[metaTheme, applyLang, connect].forEach(f => { try { f(); } catch(e){ console.error(e); } }); /* one failing step must not stop the others */

@@ -11,8 +11,16 @@ a{color:var(--mu);text-decoration:none;transition:color .2s}a:hover,a:focus-visi
 #stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:var(--tx);box-shadow:0 0 6px var(--glow);animation:tw 5s ease-in-out infinite,dr 40s linear infinite alternate}
 @keyframes tw{50%{opacity:.15}}@keyframes dr{to{transform:translate(14px,-22px)}}
 .nav,main,footer{position:relative;z-index:1}
-.nav{display:flex;flex-wrap:wrap;gap:.6rem 1rem;justify-content:space-between;align-items:center;padding:1rem 1.2rem;max-width:1000px;margin:auto}
-nav{display:flex;gap:1.2rem}.ctrl{display:flex;gap:.5rem}
+/* Header: links on the left, controls on the right. Labels never wrap (nowrap) and the controls never shrink. If the translated links
+   (RU/FR are the longest) don't fit beside the controls, the bar wraps on purpose: links spread over row 1, controls right-aligned on row 2. */
+.nav{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.25rem 1rem;padding:1rem 1.2rem;max-width:1000px;margin:auto;z-index:20}
+.nav nav{display:flex;flex-wrap:wrap;gap:0 1.2rem;min-width:0}.nav nav a{white-space:nowrap}
+.ctrl{display:flex;flex:none;gap:.5rem;margin-left:auto}
+@media(max-width:560px){
+ .nav{padding:.7rem clamp(.75rem,3.4vw,1rem);column-gap:.5rem}
+ .nav nav{flex:1 1 auto;justify-content:space-between;gap:0 .5rem}.nav nav a{font-size:clamp(.8rem,3.5vw,.92rem)}
+ .ctrl{gap:.3rem}.ctrl .lang-btn{padding:0 .6rem}
+}
 .btn{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:99px;min-height:44px;min-width:44px;padding:0 .9rem;font:inherit;font-size:.85rem;cursor:pointer;transition:border-color .2s,box-shadow .2s}
 .btn:hover:not(:disabled){border-color:var(--tx);box-shadow:0 0 12px var(--glow)}.btn:disabled{opacity:.4;cursor:default}
 [data-theme=dark] .sun,[data-theme=light] .moon{display:none}
@@ -139,7 +147,6 @@ footer p{width:fit-content;margin:0 auto}
 @media(hover:hover){.lang-menu li:hover{background:var(--bd);color:var(--tx)}}
 @media(hover:none){.lang-menu li{min-height:44px}}
 .lang-menu:focus-visible{outline:none}.lang-menu li.act{box-shadow:inset 0 0 0 1px var(--bd)}
-.nav{z-index:20}
 
 /* About Me text block */
 #about-text h3{font-weight:400;font-size:1.05rem;color:var(--tx);margin-bottom:1rem}
@@ -150,7 +157,6 @@ footer p{width:fit-content;margin:0 auto}
 .orbit{width:min(280px,70vw)}
 .tag{font-size:.8rem;letter-spacing:.14em;line-height:1.5}
 #about-text{min-height:0}
-@media(max-width:400px){.nav{padding:.7rem 1rem}nav{gap:.9rem}nav a{font-size:.92rem}}
 @media(max-width:767px){
  main{padding:0 1rem}
  .card{margin:.75rem 0;padding:1rem}.row{margin-bottom:.75rem}.split{gap:.9rem}
@@ -171,7 +177,6 @@ html.tt body,html.tt .card,html.tt .btn,html.tt .player,html.tt dialog,html.tt .
 #mute{position:relative;padding:0;width:44px}
 #mute .ic{position:absolute;inset:0;margin:auto;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .2s}
 #mute[data-muted=false] .i-off,#mute[data-muted=true] .i-on{opacity:0;transform:scale(.5)}
-@media(max-width:400px){nav{gap:.7rem}nav a{font-size:.85rem}.ctrl{gap:.3rem}.lang-btn{padding:0 .6rem}.nav{padding:.7rem .8rem}}
 #uname{margin-top:-.15rem}
 .art{position:relative;flex:none;width:64px;height:64px;border:1px solid var(--bd);border-radius:6px;display:grid;place-items:center;color:var(--mu);overflow:hidden}
 .art #sp-art{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:0;object-fit:cover}
@@ -185,12 +190,12 @@ html.tt body,html.tt .card,html.tt .btn,html.tt .player,html.tt dialog,html.tt .
 .meta a{display:block;color:var(--tx);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta a[href]:hover,.meta a[href]:focus-visible{text-decoration:underline}
 .hist{list-style:none;margin:0;padding:0 0 .4rem;display:flex;gap:.8rem;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:thin}
+.hist[hidden]{display:none}#hist-msg{margin:0;padding:.1rem 0 .4rem}
 .hist li{flex:0 0 112px;scroll-snap-align:start}
 .hist a{display:block;color:var(--tx);text-decoration:none;font-size:.82rem;line-height:1.35}
 .hist img,.hist .ph{display:block;width:112px;height:112px;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--bd);margin-bottom:.4rem;background:var(--bg)}
 .hist strong,.hist span{display:block;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hist span{color:var(--mu);font-size:.76rem}
 .hist a:hover strong,.hist a:focus-visible strong{text-decoration:underline}
-@media(max-width:400px){.nav{column-gap:.4rem}nav{gap:.6rem}}
 body{padding-bottom:140px}
 .player{padding:.5rem .7rem;gap:.4rem .7rem}.prog input{height:16px}.prog{margin-top:-.15rem}
 @media(max-width:480px){.vol{display:none}}
