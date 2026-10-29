@@ -1,0 +1,167 @@
+/* Offline test of script.js against a tiny fake DOM, a fake Lanyard WebSocket and mocked /api/* responses. It exercises the real browser code paths
+   (Discord presence, banner, badges, Spotify-from-Discord, carousel, languages, autoplay) but it is NOT a real browser:
+   layout, CSS rendering and the real autoplay policy are not tested. Run: node tests/client.test.js */
+"use strict";
+const fs = require("fs"), path = require("path"), vm = require("vm"), assert = require("assert");
+const root = path.join(__dirname, ".."), code = fs.readFileSync(path.join(root, "script.js"), "utf8"), html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+
+class El {
+  constructor(tag) { this.tagName = String(tag).toLowerCase(); this.children = []; this.style = { setProperty() {} }; this.dataset = {}; this._a = {}; this.hidden = false; this.textContent = ""; this.value = "0"; this.min = "0"; this.max = "1"; this.disabled = false; this.offsetWidth = 0; this.offsetLeft = 0; this.scrollLeft = 0; this.scrollWidth = 0; this.clientWidth = 0; this.parentNode = { hidden: false }; const s = new Set();
+    this.classList = { add: c => s.add(c), remove: c => s.delete(c), contains: c => s.has(c), toggle: (c, f) => { const on = f === undefined ? !s.has(c) : !!f; on ? s.add(c) : s.delete(c); return on; } };
+    for (const k of ["src", "href"]) Object.defineProperty(this, k, { get: () => (k in this._a ? this._a[k] : undefined), set: v => { this._a[k] = String(v); } }); }
+  setAttribute(k, v) { this._a[k] = String(v); } getAttribute(k) { return k in this._a ? this._a[k] : null; } removeAttribute(k) { delete this._a[k]; }
+  appendChild(n) { this.children.push(n); return n; } append(...n) { this.children.push(...n); } replaceChildren(...n) { this.children = n; }
+  querySelectorAll(sel) { const out = []; (function w(e) { for (const c of e.children) { if (sel === "time[datetime]" ? c.tagName === "time" && "datetime" in c._a : false) out.push(c); w(c); } })(this); return out; }
+  addEventListener() {} scrollTo(o) { this.scrollLeft = o.left; } focus() {} showModal() {} close() {} getBoundingClientRect() { return { left: 100 }; }
+  text() { return this.textContent + this.children.map(c => c.text()).join(""); }
+}
+const tick = (ms = 30) => new Promise(r => setTimeout(r, ms));
+
+async function boot({ presence, profile, recent, playBehavior = "resolve", store = {}, lang }) {
+  const els = {}, handlers = {}, audioInstances = [], playCalls = { n: 0 }, fetched = [], sockets = [];
+  const doc = { hidden: false, documentElement: new El("html"), querySelector: s => els[s] || (els[s] = new El("x")), querySelectorAll: () => [], createElement: t => new El(t), addEventListener: (e, f) => (handlers[e] = handlers[e] || []).push(f) };
+  doc.documentElement.dataset = {}; doc.querySelector("#lang-menu").children = [];
+  class Audio { constructor() { audioInstances.push(this); this.paused = true; this.volume = 1; this.muted = false; this.readyState = 0; this.error = null; this.duration = 121; this.currentTime = 0; this._l = {}; }
+    addEventListener(e, f) { (this._l[e] = this._l[e] || []).push(f); } pause() { this.paused = true; (this._l.pause || []).forEach(f => f()); }
+    play() { playCalls.n++; if (playBehavior === "NotAllowedError" || playBehavior === "AbortError") { const e = new Error("x"); e.name = playBehavior; return Promise.reject(e); }
+      this.paused = false; this.readyState = 4; (this._l.play || []).forEach(f => f()); this.onplaying && this.onplaying(); return Promise.resolve(); } }
+  class WebSocket { constructor(u) { this.url = u; this.readyState = 1; sockets.push(this); } close() {} send() {} }
+  const mem = Object.assign({}, store); if (lang) mem.lang = lang;
+  const ctx = { document: doc, Audio, WebSocket, Intl, Date, Math, console, setTimeout, clearTimeout, setInterval, clearInterval, AbortController, Promise, JSON, isFinite, parseFloat, isNaN, Number, Array, Object, String,
+    localStorage: { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); } }, matchMedia: () => ({ matches: false }), requestAnimationFrame: () => 0, addEventListener: (e, f) => (handlers[e] = handlers[e] || []).push(f), scrollY: 0, innerWidth: 1000,
+    fetch: async (url) => { fetched.push(String(url)); const pick = u => (typeof u === "function" ? u() : u);
+      if (String(url).startsWith("/api/recent")) return pick(recent.cur); if (String(url).startsWith("/api/profile")) return pick(profile.cur); if (String(url).includes("oembed")) return resp({}, 404); throw new Error("blocked " + url); } };
+  ctx.window = ctx; vm.createContext(ctx);
+  vm.runInContext(code, ctx, { filename: "script.js" });
+  await tick();
+  const push = async d => { const s = sockets[sockets.length - 1]; s.onmessage({ data: JSON.stringify({ op: 1, d: { heartbeat_interval: 3600000 } }) }); s.onmessage({ data: JSON.stringify({ op: 0, d }) }); await tick(); };
+  const p = { $: s => doc.querySelector(s), doc, push, sockets, audioInstances, playCalls, fetched, mem, fire: async ev => { (handlers[ev] || []).forEach(f => f()); await tick(); } };
+  if (presence) await push(presence);
+  return p;
+}
+const resp = (body, status = 200, headers = {}) => ({ ok: status >= 200 && status < 300, status, headers: { get: k => headers[k.toLowerCase()] ?? null }, json: async () => body });
+const holder = v => ({ cur: v });
+const NOPROF = () => holder(resp({ error: "unavailable" }, 502)), NOREC = () => holder(resp({ items: [] }));
+const ID = "1356268956398387423", TID = "0VjIjW4GlUZAMYd2vXMi3b";
+const user = { id: ID, username: "matheo", global_name: "Matheo", avatar: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4" };
+const pres = (extra) => Object.assign({ discord_user: user, discord_status: "online", activities: [], listening_to_spotify: false, spotify: null }, extra);
+const spot = (o) => Object.assign({ track_id: TID, song: "Blinding Lights", artist: "The Weeknd; Other", album: "After Hours", album_art_url: "https://i.scdn.co/image/abc", timestamps: { start: Date.now() - 61000, end: Date.now() + 139000 } }, o);
+const item = (i, extra) => Object.assign({ id: "h" + i, title: "Song " + i, artists: "Art", cover: "https://i.scdn.co/c" + i, url: "https://open.spotify.com/track/h" + i, playedAt: new Date(Date.UTC(2026, 9, 27, 12, 0) - i * 3600e3).toISOString() }, extra);
+const profile = (o) => resp(Object.assign({ id: ID, username: "matheo", displayName: "Matheo", avatar: "https://cdn.discordapp.com/avatars/" + ID + "/x.png?size=256", avatarStatic: "https://cdn.discordapp.com/avatars/" + ID + "/x.png?size=256", decoration: "", banner: null, accentColor: "", badges: [], bannerSource: "no_token" }, o));
+
+let passed = 0; const tests = []; const test = (n, f) => tests.push([n, f]);
+
+test("static: Music nav -> history section; carousel + banner elements exist; local player and mp3 intact; no Spotify Web API/OAuth in the page code", () => {
+  assert(html.includes('<a href="#history" data-i18n="music"></a>')); for (const id of ["history", "hist", "car-prev", "car-next", "car-dots", "banner", "banner-img", "badges", "custom", "av-deco", "spotify"]) assert(html.includes('id="' + id + '"'), "missing #" + id);
+  assert(!/api\.spotify\.com|accounts\.spotify\.com|\/api\/now|\/api\/spotify|refresh_token/.test(code)); assert(fs.existsSync(path.join(root, "audio/the-kill-2.mp3")) && code.includes('src: "audio/the-kill-2.mp3"'));
+  assert(code.includes("wss://api.lanyard.rest/socket"), "the existing Discord (Lanyard) connection is still used");
+});
+test("current song comes from Discord presence: label, title + Spotify link, artists, album, cover, progress, indicator; no Spotify API requests", async () => {
+  const p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot() }), profile: NOPROF(), recent: NOREC() });
+  assert.equal(p.$("#sp-label").textContent, "listening to spotify"); assert.equal(p.$("#sp-song").textContent, "Blinding Lights"); assert.equal(p.$("#sp-song").href, "https://open.spotify.com/track/" + TID);
+  assert.equal(p.$("#sp-artist").textContent, "The Weeknd, Other"); assert.equal(p.$("#sp-album").textContent, "After Hours"); assert.equal(p.$("#sp-art").src, "https://i.scdn.co/image/abc");
+  assert(p.$("#spotify").classList.contains("playing")); assert.equal(p.$(".sp-prog").hidden, false); assert.equal(p.$("#sp-cur").textContent, "1:01"); assert.equal(p.$("#sp-dur").textContent, "3:20");
+  assert(p.fetched.every(u => u.startsWith("/api/profile") || u.startsWith("/api/recent") || u.includes("oembed")), "only own endpoints: " + p.fetched.join());
+});
+test("no song: idle state with the quiet message; song disappears when Discord stops reporting it; never claims 'listening' falsely", async () => {
+  const p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot() }), profile: NOPROF(), recent: NOREC() });
+  await p.push(pres()); assert.equal(p.$("#sp-label").textContent, "nothing playing right now"); assert(p.$("#spotify").classList.contains("idle")); assert.equal(p.$("#sp-song").textContent, ""); assert.equal(p.$("#sp-song").href, undefined); assert.equal(p.$(".sp-prog").hidden, true);
+});
+test("song change updates the card; incomplete data: no track id -> no link; no timestamps -> no progress bar (only reliable data)", async () => {
+  const p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot() }), profile: NOPROF(), recent: NOREC() });
+  await p.push(pres({ listening_to_spotify: true, spotify: spot({ song: "Second", track_id: null, timestamps: {}, album_art_url: "" }) }));
+  assert.equal(p.$("#sp-song").textContent, "Second"); assert.equal(p.$("#sp-song").href, undefined); assert.equal(p.$(".sp-prog").hidden, true); assert.equal(p.$("#sp-art").style.display, "none");
+  await p.push(pres({ listening_to_spotify: true, spotify: spot({ track_id: "../evil", timestamps: { start: 5, end: 1 } }) })); assert.equal(p.$("#sp-song").href, undefined); assert.equal(p.$(".sp-prog").hidden, true);
+});
+test("Discord connection lost before any data -> unavailable (not 'listening')", async () => {
+  const p = await boot({ profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#sp-label").textContent, "loading");
+});
+test("banner: real banner URL from /api/profile is shown as the header; static fallback when there is none; foreign hosts are rejected", async () => {
+  const url = "https://cdn.discordapp.com/banners/" + ID + "/b.gif?size=1024";
+  let p = await boot({ presence: pres(), profile: holder(profile({ banner: { url, staticUrl: url.replace(".gif", ".png"), animated: true }, accentColor: "#2b6cb0", bannerSource: "ok" })), recent: NOREC() });
+  assert.equal(p.$("#banner-img").src, url); assert.equal(p.$("#banner-img").hidden, false); assert.equal(p.$("#banner").dataset.has, "1");
+  p = await boot({ presence: pres(), profile: holder(profile({ banner: null })), recent: NOREC() }); assert.equal(p.$("#banner-img").hidden, true); assert.equal(p.$("#banner").dataset.has, "0"); assert.equal(p.$("#banner-img").src, undefined, "no banner is invented");
+  p = await boot({ presence: pres(), profile: holder(profile({ banner: { url: "https://evil.example/x.png", staticUrl: "https://evil.example/x.png", animated: false } })), recent: NOREC() }); assert.equal(p.$("#banner-img").hidden, true);
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#banner").dataset.has, "0"); assert.equal(p.$("#name").textContent, "Matheo");
+});
+test("profile card: avatar, name, @username, status, custom status, activity, decoration only when provided", async () => {
+  const acts = [{ type: 4, name: "Custom Status", state: "studying", emoji: { name: "📚" } }, { type: 0, name: "Visual Studio Code", details: "Editing script.js" }];
+  const dec = "https://cdn.discordapp.com/avatar-decoration-presets/a_x.png?size=160&passthrough=true";
+  let p = await boot({ presence: pres({ discord_status: "dnd", activities: acts }), profile: holder(profile({ decoration: dec })), recent: NOREC() });
+  assert.equal(p.$("#name").textContent, "Matheo"); assert.equal(p.$("#uname").textContent, "@matheo"); assert.equal(p.$("#status").textContent, "do not disturb"); assert.equal(p.$("#st-dot").dataset.s, "dnd");
+  assert.equal(p.$("#custom").textContent, "📚 studying"); assert.equal(p.$("#custom").hidden, false); assert.equal(p.$("#activity").textContent, "Visual Studio Code — Editing script.js"); assert.equal(p.$("#av-deco").src, dec); assert.equal(p.$("#av-deco").hidden, false);
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#av-deco").hidden, true); assert.equal(p.$("#custom").hidden, true); assert.equal(p.$("#activity").textContent, "no current activity");
+  for (const [st, txt] of [["online", "online"], ["idle", "idle"], ["offline", "offline"]]) { await p.push(pres({ discord_status: st })); assert.equal(p.$("#status").textContent, txt); }
+});
+test("badges: only the ones reported are shown, translated; unknown keys ignored; none -> list hidden; no bio is invented", async () => {
+  let p = await boot({ presence: pres(), profile: holder(profile({ badges: ["hypesquadBravery", "activeDeveloper", "madeUpBadge"] })), recent: NOREC() });
+  assert.deepEqual(p.$("#badges").children.map(li => li.textContent), ["HypeSquad Bravery", "Active Developer"]); assert.equal(p.$("#badges").hidden, false);
+  p = await boot({ presence: pres(), profile: holder(profile({ badges: ["activeDeveloper"] })), recent: NOREC(), lang: "fr" }); assert.deepEqual(p.$("#badges").children.map(li => li.textContent), ["Développeur actif"]);
+  p = await boot({ presence: pres(), profile: holder(profile({ badges: [] })), recent: NOREC() }); assert.equal(p.$("#badges").hidden, true);
+  assert(!/id="bio"|id="about-me"/.test(html));
+});
+test("carousel: up to 10, newest first, cover/title/artist/time/link; entries without a Spotify link are dropped (foreign host) or shown without link (none)", async () => {
+  const items = Array.from({ length: 12 }, (_, i) => item(i)); items.splice(3, 0, item(99, { url: "https://evil.example/" })); items.push(item(50, { url: "" }));
+  const p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items })) }); const lis = p.$("#hist").children;
+  assert.equal(lis.length, 10); assert.deepEqual(lis.map(li => li.children[0].children[1].textContent).slice(0, 4), ["Song 0", "Song 1", "Song 2", "Song 4"].map((x, k) => k === 3 ? "Song 3" : x).slice(0, 3).concat(["Song 3"]));
+  const a = lis[0].children[0]; assert.equal(a.href, "https://open.spotify.com/track/h0"); assert.equal(a.children[0].src, "https://i.scdn.co/c0"); assert.equal(a.children[3].tagName, "time"); assert(a.children[3].getAttribute("datetime").startsWith("2026-10-27T12:00")); assert(a.children[3].textContent.length > 0);
+  assert.equal(p.$("#hist").hidden, false); assert.equal(p.$("#hist-msg").hidden, true); assert.equal(p.$("#history").hidden, false); assert.equal(p.$("#car-dots").children.length, 10); assert.equal(p.$("#car-dots").hidden, false);
+});
+test("carousel: a repeated song after others is shown twice (two plays)", async () => {
+  const items = [item(1, { id: "A" }), item(2, { id: "B" }), item(3, { id: "A" })]; const p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items })) }); assert.equal(p.$("#hist").children.length, 3);
+});
+test("carousel: fewer than 10 shows only those; empty -> message; error -> message, then recovers; a failure keeps the last good carousel", async () => {
+  let p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)] })) }); assert.equal(p.$("#hist").children.length, 1); assert.equal(p.$("#car-dots").hidden, true);
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#hist-msg").textContent, "no recent plays to show yet"); assert.equal(p.$("#hist").hidden, true);
+  const rec = holder(resp({ error: "storage_not_configured" }, 503)); p = await boot({ presence: pres(), profile: NOPROF(), recent: rec }); assert.equal(p.$("#hist-msg").textContent, "recent plays are unavailable right now"); assert.equal(p.$("#history").hidden, false);
+  rec.cur = resp({ items: [item(1)] }); await p.fire("visibilitychange"); assert.equal(p.$("#hist").children.length, 1); assert.equal(p.$("#hist-msg").hidden, true);
+  rec.cur = resp({ error: "x" }, 502); await p.fire("visibilitychange"); assert.equal(p.$("#hist").children.length, 1, "last good list kept on a transient error"); assert.equal(p.$("#hist-msg").hidden, true);
+  rec.cur = { ok: true, status: 200, headers: { get: () => null }, json: async () => { throw new Error("bad json"); } }; await p.fire("visibilitychange"); assert.equal(p.$("#hist").children.length, 1);
+});
+test("carousel: arrows move by a page and disable at the ends; dots follow the position", async () => {
+  const items = Array.from({ length: 10 }, (_, i) => item(i)); const p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items })) }), h = p.$("#hist");
+  h.children.forEach((c, i) => { c.offsetLeft = i * 200; c.offsetWidth = 190; }); h.scrollWidth = 2000; h.clientWidth = 820; await p.fire("resize");
+  assert.equal(p.$("#car-prev").disabled, true); assert.equal(p.$("#car-next").disabled, false); p.$("#car-next").onclick(); assert.equal(h.scrollLeft, 800, "4 cards per page");
+  h.scrollLeft = 1180; await p.fire("resize"); assert.equal(p.$("#car-next").disabled, true); assert.equal(p.$("#car-prev").disabled, false); assert.equal(p.$("#car-dots").children[6].getAttribute("aria-current"), "true");
+  p.$("#car-dots").children[2].onclick(); assert.equal(h.scrollLeft, 400);
+});
+test("no request while the tab is hidden; one immediate refresh when it becomes visible", async () => {
+  const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); const count = () => p.fetched.filter(u => u === "/api/recent").length; const n0 = count();
+  p.doc.hidden = true; await p.fire("visibilitychange"); assert.equal(count(), n0); p.doc.hidden = false; await p.fire("visibilitychange"); assert(count() >= n0 + 0);
+});
+test("languages: every text has 5 non-empty translations; ALL original translations are unchanged; new texts exist in en/es/ru/de/fr", () => {
+  const grab = src => { const m = src.match(/const T = (\{[\s\S]*?\n\});/); return vm.runInNewContext("(" + m[1] + ")"); };
+  const T = grab(code), O = JSON.parse(fs.readFileSync(path.join(__dirname, "original-translations.json"), "utf8")); /* snapshot of the translations before this work */
+  for (const k of Object.keys(O)) assert.deepEqual(T[k], O[k], "original translation changed: " + k);
+  for (const [k, v] of Object.entries(T)) { assert.equal(v.length, 5, k); v.forEach(x => assert(typeof x === "string" && x.trim(), k + " empty")); }
+  for (const k of ["prev", "next", "song", "badges", "history", "historyEmpty", "historyError", "nothingPlaying", "listening", "openSpotify", "loading", "online", "idle", "dnd", "offline", "noActivity"]) assert(T[k], "missing " + k);
+  assert(Object.keys(T).filter(k => k.startsWith("b_")).length >= 12); assert.deepEqual(T.history, ["recently played", "escuchado recientemente", "недавно прослушано", "zuletzt gehört", "écouté récemment"]);
+  assert(/data-i18n-label="prev"/.test(html) && /data-i18n-label="next"/.test(html));
+});
+test("languages: carousel, states and Spotify labels render in ru / de / fr / es", async () => {
+  for (const [lang, empty, listening, dnd] of [["ru", "пока нет недавних прослушиваний", "слушает spotify", "не беспокоить"], ["de", "noch keine zuletzt gehörten Titel", "hört spotify", "bitte nicht stören"], ["fr", "aucune écoute récente à afficher pour le moment", "écoute spotify", "ne pas déranger"], ["es", "aún no hay reproducciones recientes que mostrar", "escuchando spotify", "no molestar"]]) {
+    const p = await boot({ presence: pres({ discord_status: "dnd", listening_to_spotify: true, spotify: spot() }), profile: NOPROF(), recent: NOREC(), lang });
+    assert.equal(p.$("#hist-msg").textContent, empty); assert.equal(p.$("#sp-label").textContent, listening); assert.equal(p.$("#status").textContent, dnd);
+  }
+});
+test("Autoplay: attempted once on load, ONE Audio instance, plays when allowed", async () => {
+  const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), playBehavior: "resolve" });
+  assert.equal(p.audioInstances.length, 1); assert.equal(p.playCalls.n, 1); assert.equal(p.$("#p-status").textContent, "playing"); assert(p.$("#player").classList.contains("playing"));
+});
+test("Autoplay blocked (NotAllowedError): control stays enabled + visible hint; a click starts it; still one instance", async () => {
+  const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), playBehavior: "NotAllowedError" });
+  assert.equal(p.playCalls.n, 1); assert.equal(p.$("#play").disabled, false); assert(p.$("#player").classList.contains("blocked")); assert.equal(p.$("#p-status").textContent, "tap play to start music");
+  p.audioInstances[0].play = function () { p.playCalls.n++; this.paused = false; this.readyState = 4; (this._l.play || []).forEach(f => f()); this.onplaying && this.onplaying(); return Promise.resolve(); };
+  p.$("#play").onclick(); await tick(); assert.equal(p.$("#p-status").textContent, "playing"); assert.equal(p.audioInstances.length, 1); assert.equal(p.mem.music, "on");
+});
+test("Autoplay interrupted (AbortError) is not an error; a visitor who paused before (music=off) is respected", async () => {
+  let p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), playBehavior: "AbortError" }); assert.notEqual(p.$("#p-status").textContent, "couldn't load audio"); assert(!p.$("#player").classList.contains("blocked"));
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), store: { music: "off" } }); assert.equal(p.playCalls.n, 0); assert.equal(p.$("#play").disabled, false);
+});
+test("language change does not touch the audio instance", async () => { const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), lang: "es" }); assert.equal(p.audioInstances.length, 1); });
+
+(async () => {
+  const realLog = console.log; let pass = 0;
+  for (const [name, fn] of tests) { try { await fn(); pass++; realLog("  ok   " + name); } catch (e) { realLog("  FAIL " + name + "\n       " + (e && e.stack || e)); process.exitCode = 1; } }
+  realLog("\n" + pass + "/" + tests.length + " passed (fake DOM; not a real browser)"); process.exit(process.exitCode || 0);
+})();
