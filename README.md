@@ -36,7 +36,7 @@ Los ajustes visibles están al principio de `script.js` (`CONFIG`). Los cinco id
 | Decoración del avatar | ✅ si tienes una | Lanyard / API oficial |
 | Insignias públicas que Discord incluye en `public_flags` (HypeSquad, Active Developer, Early Supporter, Bug Hunter, etc.) | ✅ solo las que tengas | Lanyard / API oficial |
 | **Banner real** (animado si es GIF) y color de acento | ✅ **requiere un bot token** (ver paso 2) | API oficial `GET /users/{id}` |
-| **Biografía ("Sobre mí")** | ❌ no disponible | Ninguna API oficial ni pública la expone. Solo se obtiene con endpoints internos o token de usuario, que no se usan. No se muestra nada inventado. |
+| **Biografía ("Sobre mí")** | ⚠️ **no la expone ni Lanyard ni la API oficial** | Comprobado: el objeto de Lanyard no trae biografía ni banner, y la API oficial de Discord tampoco da la biografía. Solo se obtiene con endpoints internos o token de usuario, que no se usan. **Opción soportada:** guardarla tú en el KV de Lanyard (ver abajo). Sin eso, el bloque no aparece. |
 | Insignias de Nitro, Boost, Quests, Orbs, nombre de usuario antiguo | ❌ no disponibles | No están en `public_flags`; no se muestran ni se adivinan. |
 
 Si el banner no está disponible (sin bot token, sin banner en tu perfil o error de Discord), la tarjeta muestra un fondo discreto con tu color de acento si se conoce. **Nunca** se usa una imagen de ejemplo.
@@ -55,6 +55,12 @@ Discord solo entrega el banner a su API oficial con la credencial de un **bot** 
 2. No hace falta darle permisos ni invitarlo a ningún servidor.
 3. En Vercel añade `DISCORD_BOT_TOKEN` (Production) y haz Redeploy. El token solo existe en el servidor.
 4. Sin él, todo funciona salvo el banner y el color de acento. Coste: gratis.
+
+### 2b. Biografía ("Sobre mí") — opcional, la guardas tú
+Discord no entrega tu biografía a ninguna API legítima. Lo que sí está soportado es el **KV de Lanyard**: un almacén de pares clave/valor que Lanyard devuelve junto a tu presencia.
+1. Guarda una clave llamada `bio` con tu texto, con el comando de Lanyard en su servidor (`discord.gg/lanyard`, comando `/set`) o con su API REST y tu `apikey` (documentación: https://github.com/Phineas/lanyard, sección KV; compruébala porque puede cambiar).
+2. La web la muestra debajo del usuario. Para saltos de línea escribe `\n` en el texto; se respetan. Admite un subconjunto seguro de formato de Discord: `**negrita**`, `*cursiva*`, `~~tachado~~` y `` `código` `` (nunca se interpreta HTML). Máximo 600 caracteres.
+3. **Es una copia que mantienes tú**, no una lectura automática de tu perfil: si cambias la biografía en Discord, hay que actualizar también la clave. Sin la clave `bio`, no se muestra ningún bloque vacío.
 
 ### 3. Registrar canciones aunque nadie visite la web (opcional)
 El servidor registra una canción cuando alguien llama a `/api/recent` (la web lo hace cada 15 s con la pestaña visible). **Si no abre la web nadie mientras escuchas música, esas canciones no se registran.** Para cubrir ese hueco:
@@ -83,21 +89,33 @@ Opcional: puedes borrar también la app del Spotify Developer Dashboard y revoca
 - El historial **empieza desde que lo despliegues**. No existe una fuente legítima para recuperar reproducciones anteriores y no se inventa nada.
 - Granularidad: se detecta lo que Lanyard/Discord reporta en el momento de la consulta; una canción que dure menos que el intervalo entre consultas y no coincida con ninguna puede no registrarse (por eso el paso 3 es útil).
 
+## Si el banner sigue saliendo como un fondo oscuro
+
+El fondo oscuro con puntos es el **respaldo**: significa que el servidor no recibió ningún banner de Discord. Comprueba, en este orden, abriendo `https://whoismatheo.vercel.app/api/profile`:
+- `"bannerSource":"no_token"` → falta la variable `DISCORD_BOT_TOKEN` en Vercel (o añadiste la variable pero no hiciste **Redeploy**). Es la causa más probable.
+- `"bannerSource":"bad_token"` → el token es incorrecto o se reinició; genera otro en el Developer Portal.
+- `"bannerSource":"error"` → Discord no respondió; reintenta.
+- `"bannerSource":"ok"` y `"banner":null` → tu perfil de Discord no tiene banner. Si tienes color de acento, la tarjeta lo muestra liso, como hace Discord.
+- `"bannerSource":"ok"` y `"banner":{...}` → debe verse; si no, abre la URL de `banner.url` directamente.
+Yo no puedo consultar tu producción, así que no he podido confirmar cuál de estos casos es el tuyo. Las respuestas de `/api/profile` se cachean 5 min.
+
 ## Banner, animación y actualización
 
 - El banner se pide a `/api/profile` (cacheado 5 min en el CDN) y la web lo recarga cada 5 min. Si cambias el banner en Discord, aparece solo, sin tocar código.
-- Se muestra en la cabecera de la tarjeta con `object-fit: cover` (sin deformar), alto adaptable (`clamp(96px, 24vw, 170px)`). Si es GIF animado se conserva la animación; con "reducir movimiento" activado en el dispositivo se usa el fotograma estático.
+- Se muestra tal cual, **sin degradado ni capa oscura encima**, con la proporción 5:2 de los banners de Discord (en móvil se ve completo; en pantallas anchas se limita a 200 px de alto y se recorta con `object-fit: cover`, sin deformar). Si es GIF animado se conserva la animación; con "reducir movimiento" activado en el dispositivo se usa el fotograma estático. Si la imagen no carga, se muestra el respaldo en vez de una imagen rota.
 - Avatar, nombre y datos van debajo del banner, nunca encima del texto, para mantener la legibilidad.
 
 ## Pruebas
 
 ```
-node tests/api.test.js      # 26 pruebas: Lanyard, API de Discord y Redis SIMULADOS (registro, deduplicación, límite de 10, orden,
+node tests/api.test.js      # 27 pruebas: Lanyard, API de Discord y Redis SIMULADOS (registro, deduplicación, límite de 10, orden,
                             # persistencia tras "reiniciar", errores de red, datos incompletos, seguridad, ausencia de código de Spotify API)
-node tests/client.test.js   # 19 pruebas: script.js con DOM y WebSocket simulados (canción desde Discord, banner, insignias, carrusel,
+node tests/client.test.js   # 21 pruebas: script.js con DOM y WebSocket simulados (canción desde Discord, banner, insignias, carrusel,
                             # 5 idiomas, estados vacío/error, reproductor)
 ```
-Son pruebas **automatizadas y offline con mocks**. No demuestran que tu cuenta real funcione ni cómo se ve en un navegador real (maquetación y responsive no se han podido probar visualmente en este entorno). Eso solo se comprueba con tu cuenta, ver a continuación.
+Son pruebas **automatizadas y offline con mocks**. No demuestran que tu cuenta real funcione.
+
+Opcional, en navegador real (Chromium con Playwright, datos simulados, sin red ni cuenta): `python3 tests/e2e/layout_check.py demo` carga la web en EN/FR/RU a 320–1280 px, comprueba que no hay desplazamiento horizontal ni elementos fuera de pantalla, y guarda capturas en `tests/e2e/out/`. Requiere `pip install playwright && playwright install chromium`.
 
 ## Probarlo desde tu teléfono Android (después de desplegar una vista previa)
 

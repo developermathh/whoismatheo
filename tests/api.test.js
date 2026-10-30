@@ -132,7 +132,7 @@ test("profile: without a bot token -> avatar/name/badges from Lanyard, banner nu
   reset(); lan.user.public_flags = (1 << 6) | (1 << 22); const r = await prof(); assert.equal(r.status, 200);
   assert.equal(r.json.banner, null); assert.equal(r.json.bannerSource, "no_token"); assert.equal(r.json.displayName, "Matheo"); assert.deepEqual(r.json.badges, ["hypesquadBravery", "activeDeveloper"]);
   assert(r.json.avatar.startsWith("https://cdn.discordapp.com/avatars/" + ID + "/")); assert.equal(r.json.accentColor, ""); assert.equal(r.json.decoration, "");
-  assert(!("bio" in r.json) && !("about" in r.json), "the bio is not available from any official API and is never invented");
+  assert.equal(r.json.bio, "", "the bio is not available from any official API: empty unless YOU stored it in Lanyard KV");
   assert(calls.every(c => !c.url.startsWith("https://discord.com")), "no Discord API call without a token");
 });
 test("profile: no flags -> no badges (never shows badges you do not have)", async () => { reset(); lan.user.public_flags = 0; assert.deepEqual((await prof()).json.badges, []); lan.user.public_flags = undefined; assert.deepEqual((await prof()).json.badges, []); });
@@ -153,6 +153,12 @@ test("profile: static banner -> png; user without banner -> null; bad token -> b
 test("profile: Discord API network failure -> still 200 from Lanyard data; both sources down -> error code only", async () => {
   reset(); lan.discordApi = () => { throw new Error("boom"); }; let r = await prof({ DISCORD_BOT_TOKEN: "t" }); assert.equal(r.status, 200); assert.equal(r.json.bannerSource, "error"); assert.equal(r.json.banner, null);
   lan.status = 0; lan.discordApi = () => { throw new Error("boom"); }; r = await prof({ DISCORD_BOT_TOKEN: "t" }); assert.notEqual(r.status, 200); assert(Object.keys(r.json).join() === "error");
+});
+
+test("profile: bio only comes from the owner's own Lanyard KV key 'bio' (trimmed to 600 chars); non-string KV values are ignored", async () => {
+  reset(); const orig = global.fetch; const withKv = kv => { global.fetch = async (u, o) => { if (String(u).startsWith("https://api.lanyard.rest/")) return J({ success: true, data: { discord_user: lan.user, kv } }); return orig(u, o); }; };
+  withKv({ bio: "Hola\\nmundo " + "x".repeat(700) }); let r = await prof(); assert(r.json.bio.startsWith("Hola") && r.json.bio.length === 600);
+  withKv({ bio: 42 }); r = await prof(); assert.equal(r.json.bio, ""); withKv({}); r = await prof(); assert.equal(r.json.bio, ""); install();
 });
 
 /* ===== pure logic ===== */

@@ -4,6 +4,7 @@
      2. Discord's OFFICIAL API  GET /users/{id}  with YOUR BOT's token (env DISCORD_BOT_TOKEN, server only): banner, accent colour.
         Without that variable the banner is simply not available and the card shows its neutral fallback.
    NOT available from any official API: the "About me" bio, Nitro/boost/Quest badges. They are never invented.
+   The bio is shown only if YOU store it yourself in Lanyard's KV under the key "bio" (see README).
    Success: 200 { id, username, displayName, avatar, decoration, banner: {url, staticUrl, animated} | null, accentColor, badges: [], bannerSource } */
 const { sendJson, allowGet, sendError, timeout } = require("./_lib/http");
 const { fetchPresence, discordId, ID_RE } = require("./_lib/lanyard");
@@ -29,6 +30,7 @@ module.exports = async (req, res) => {
     if (!ID_RE.test(String(id || ""))) { const e = new Error("not_configured"); e.code = "not_configured"; e.status = 503; e.detail = "DISCORD_USER_ID missing"; throw e; }
     const [pres, off] = await Promise.all([fetchPresence(id).catch(e => { console.error("[api/profile] lanyard", e.code); return null; }), officialUser(id)]);
     const lu = (pres && pres.discord_user) || {}, ou = off.user || {};
+    const kvBio = pres && pres.kv && typeof pres.kv.bio === "string" ? pres.kv.bio.slice(0, 600) : ""; /* only what YOU stored in Lanyard KV; the official API has no bio */
     const u = Object.assign({}, lu, ou);                                /* the official API wins when both answer */
     if (!u.id) { const e = new Error("unavailable"); e.code = "unavailable"; throw e; }
     const avatarHash = HASH_RE.test(u.avatar || "") ? u.avatar : "";
@@ -43,6 +45,7 @@ module.exports = async (req, res) => {
       banner: bannerHash ? { url: `${CDN}/banners/${u.id}/${bannerHash}.${animated ? "gif" : "png"}?size=1024`, staticUrl: `${CDN}/banners/${u.id}/${bannerHash}.png?size=1024`, animated } : null,
       accentColor: Number.isInteger(ou.accent_color) && ou.accent_color >= 0 && ou.accent_color <= 0xFFFFFF ? "#" + ou.accent_color.toString(16).padStart(6, "0") : "",
       badges: badgesFrom(u.public_flags),
+      bio: kvBio,
       bannerSource: off.status                                           /* ok | no_token | bad_token | error */
     };
     sendJson(res, 200, body, "public, s-maxage=300, stale-while-revalidate=600");

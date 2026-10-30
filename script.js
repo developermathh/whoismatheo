@@ -88,7 +88,7 @@ let conn = CONFIG.discordUserId ? "connecting" : "notConfigured", pres = null;
 let playerState = { blocked:false, error:false };
 
 function setText(el, t){ if (el.textContent === t) return; el.textContent = t; if (!el.dataset.rdy){ el.dataset.rdy = 1; return; } el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); }
-let avBad = "", spT, histT, prof = null, profFails = 0, profT;
+let avBad = "", bannerBad = "", spT, histT, prof = null, profFails = 0, profT;
 /* Spotify as Discord reports it (Lanyard's `spotify` object). Same source as before: nothing is invented, no Spotify API involved. */
 const TRACK_RE = /^[A-Za-z0-9]{22}$/;
 function spotifyOf(d){
@@ -101,9 +101,28 @@ const safeUrl = u => /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\/
 /* ===== Discord card: live presence (Lanyard WebSocket) + public profile (GET /api/profile) ===== */
 function renderBanner(){
   const box = $("#banner"), img = $("#banner-img"), b = prof && prof.banner;
-  const src = b ? safeUrl(still ? b.staticUrl : b.url) : ""; /* animated banner unless the visitor asked for reduced motion */
-  box.style.setProperty("--acc", prof && /^#[0-9a-f]{6}$/i.test(prof.accentColor || "") ? prof.accentColor : "");
-  if (src){ if (img.getAttribute("src") !== src) img.src = src; img.hidden = false; box.dataset.has = "1"; } else { img.hidden = true; box.dataset.has = "0"; }
+  const src = b ? safeUrl(still ? b.staticUrl : b.url) : "", acc = prof && /^#[0-9a-f]{6}$/i.test(prof.accentColor || "") ? prof.accentColor : "";
+  box.style.setProperty("--acc", acc);
+  /* no banner: Discord itself shows the profile accent colour as a flat banner; without it, a quiet dotted background. Never a made-up image. */
+  box.dataset.acc = !src && acc ? "1" : "0";
+  if (src && src !== bannerBad){ if (img.getAttribute("src") !== src) img.src = src; img.hidden = false; box.dataset.has = "1"; } else { img.hidden = true; box.dataset.has = "0"; }
+}
+/* About Me: the Discord API does not expose it. The only supported source is a Lanyard KV key named "bio" that YOU set (see README). Otherwise nothing is shown. */
+function bioText(){
+  const raw = (pres && pres.kv && pres.kv.bio) || (prof && prof.bio) || ""; if (typeof raw !== "string") return "";
+  return raw.replace(/\\n/g, "\n").replace(/\r\n?/g, "\n").trim().slice(0, 600);
+}
+function bioNodes(t){ /* tiny, safe subset of Discord markdown: **bold** ~~strike~~ `code` *italic* _italic_ ; everything else stays plain text (textContent only, no innerHTML) */
+  const out = [], re = /(\*\*[^*\n]+\*\*|~~[^~\n]+~~|`[^`\n]+`|\*[^*\n]+\*|_[^_\n]+_)/g; let last = 0, m;
+  const add = (tag, txt) => { const e = document.createElement(tag); e.textContent = txt; out.push(e); };
+  while ((m = re.exec(t))){ if (m.index > last) out.push(t.slice(last, m.index)); const x = m[0];
+    if (x.startsWith("**")) add("b", x.slice(2, -2)); else if (x.startsWith("~~")) add("s", x.slice(2, -2)); else if (x[0] === "`") add("code", x.slice(1, -1)); else add("i", x.slice(1, -1)); last = m.index + x.length; }
+  if (last < t.length) out.push(t.slice(last)); return out;
+}
+let bioKey = "";
+function renderBio(){
+  const el = $("#bio"), t = bioText(); el.hidden = !t; if (t === bioKey) return; bioKey = t;
+  el.replaceChildren(...(t ? bioNodes(t) : [])); /* line breaks are kept by CSS (white-space: pre-line) */
 }
 function renderBadges(){
   const list = (prof && Array.isArray(prof.badges) ? prof.badges : []).filter(k => T["b_" + k]), ul = $("#badges");
@@ -128,7 +147,7 @@ function renderPresence(){
   if (src && src !== avBad){ if (av.getAttribute("src") !== src) av.src = src; av.hidden = false; $("#av-fb").hidden = true; } else { av.hidden = true; $("#av-fb").hidden = false; }
   const dec = safeUrl((prof && prof.decoration) || (u.avatar_decoration_data && u.avatar_decoration_data.asset ? `https://cdn.discordapp.com/avatar-decoration-presets/${u.avatar_decoration_data.asset}.png?size=160&passthrough=true` : "")), de = $("#av-deco");
   if (dec){ if (de.getAttribute("src") !== dec) de.src = dec; de.hidden = false; } else de.hidden = true;
-  renderBanner(); renderBadges(); renderSpotify();
+  renderBanner(); renderBio(); renderBadges(); renderSpotify();
 }
 /* ===== Spotify activity (from Discord): loading | playing | idle (nothing detected) | error. No data = no song shown. ===== */
 let lastSpId = null;
@@ -175,6 +194,7 @@ addEventListener("online", () => { tries = 0; connect(); loadHistory(); loadProf
 addEventListener("pagehide", () => { clearInterval(spT); clearInterval(histT); clearTimeout(profT); stopped = true; clearTimeout(rt); clearTimeout(wt); clearInterval(hb); if (ws) ws.close(); });
 addEventListener("pageshow", e => { if (e.persisted){ stopped = false; tries = 0; connect(); startHistory(); loadProfile(); } });
 $("#sp-art").onerror = e => e.target.style.display = "none";
+$("#banner-img").onerror = e => { bannerBad = e.target.getAttribute("src"); renderBanner(); };
 $("#av").onerror = e => { avBad = e.target.getAttribute("src"); e.target.hidden = true; $("#av-fb").hidden = false; };
 
 /* ===== Player (single Audio instance; language/theme changes never touch it) ===== */
@@ -212,6 +232,10 @@ function renderPlayer(){
   renderMute();
 }
 $("#cover").onerror = e => e.target.hidden = true;
+/* the floating player can grow (long FR/RU texts wrap): keep the page padding in sync so it never covers the end of the page */
+const syncPlayerH = () => document.documentElement.style.setProperty("--player-h", Math.ceil(pl.getBoundingClientRect().height || 108) + "px");
+if (typeof ResizeObserver !== "undefined") try { new ResizeObserver(syncPlayerH).observe(pl); } catch(e){}
+addEventListener("resize", syncPlayerH); syncPlayerH();
 $("#play").onclick = () => { if (audio.paused){ store.set("music", "on"); try { const p = audio.play(); if (p && p.catch) p.catch(failPlay); } catch(e){ failPlay(e); } } else { store.set("music", "off"); audio.pause(); } };
 fill(vol); vol.value = audio.volume; fill(vol);
 tryAutoplay(); /* a visitor who paused earlier (music=off) is respected */

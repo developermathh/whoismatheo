@@ -13,7 +13,7 @@ class El {
   appendChild(n) { this.children.push(n); return n; } append(...n) { this.children.push(...n); } replaceChildren(...n) { this.children = n; }
   querySelectorAll(sel) { const out = []; (function w(e) { for (const c of e.children) { if (sel === "time[datetime]" ? c.tagName === "time" && "datetime" in c._a : false) out.push(c); w(c); } })(this); return out; }
   addEventListener() {} scrollTo(o) { this.scrollLeft = o.left; } focus() {} showModal() {} close() {} getBoundingClientRect() { return { left: 100 }; }
-  text() { return this.textContent + this.children.map(c => c.text()).join(""); }
+  text() { return this.textContent + this.children.map(c => (typeof c === "string" ? c : c.text())).join(""); }
 }
 const tick = (ms = 30) => new Promise(r => setTimeout(r, ms));
 
@@ -98,7 +98,18 @@ test("badges: only the ones reported are shown, translated; unknown keys ignored
   assert.deepEqual(p.$("#badges").children.map(li => li.textContent), ["HypeSquad Bravery", "Active Developer"]); assert.equal(p.$("#badges").hidden, false);
   p = await boot({ presence: pres(), profile: holder(profile({ badges: ["activeDeveloper"] })), recent: NOREC(), lang: "fr" }); assert.deepEqual(p.$("#badges").children.map(li => li.textContent), ["Développeur actif"]);
   p = await boot({ presence: pres(), profile: holder(profile({ badges: [] })), recent: NOREC() }); assert.equal(p.$("#badges").hidden, true);
-  assert(!/id="bio"|id="about-me"/.test(html));
+});
+test("bio: hidden when unavailable (no empty box); shown from the owner's Lanyard KV 'bio' or /api/profile, line breaks kept, safe formatting only, never HTML", async () => {
+  let p = await boot({ presence: pres(), profile: holder(profile()), recent: NOREC() }); assert.equal(p.$("#bio").hidden, true); assert.equal(p.$("#bio").children.length, 0);
+  p = await boot({ presence: pres({ kv: { bio: "Hola **Matheo**\\nsegunda línea <img src=x onerror=alert(1)>" } }), profile: NOPROF(), recent: NOREC() });
+  assert.equal(p.$("#bio").hidden, false); const t = p.$("#bio").text(); assert(t.includes("Hola Matheo\nsegunda línea <img src=x onerror=alert(1)>"), t); assert.equal(p.$("#bio").children.find(c => typeof c !== "string").tagName, "b"); assert(!p.$("#bio").children.some(c => typeof c !== "string" && c.tagName === "img"));
+  p = await boot({ presence: pres(), profile: holder(profile({ bio: "desde la API" })), recent: NOREC() }); assert.equal(p.$("#bio").text(), "desde la API");
+  p = await boot({ presence: pres({ kv: { bio: 7 } }), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#bio").hidden, true);
+});
+test("banner: if the image fails to load the clean fallback is shown instead of a broken image; accent colour is used flat when there is no banner", async () => {
+  const url = "https://cdn.discordapp.com/banners/" + ID + "/b.png?size=1024"; const p = await boot({ presence: pres(), profile: holder(profile({ banner: { url, staticUrl: url, animated: false } })), recent: NOREC() });
+  assert.equal(p.$("#banner").dataset.has, "1"); p.$("#banner-img").onerror({ target: p.$("#banner-img") }); assert.equal(p.$("#banner-img").hidden, true); assert.equal(p.$("#banner").dataset.has, "0");
+  const q = await boot({ presence: pres(), profile: holder(profile({ banner: null, accentColor: "#2b6cb0" })), recent: NOREC() }); assert.equal(q.$("#banner").dataset.acc, "1"); assert.equal(q.$("#banner-img").hidden, true);
 });
 test("carousel: up to 10, newest first, cover/title/artist/time/link; entries without a Spotify link are dropped (foreign host) or shown without link (none)", async () => {
   const items = Array.from({ length: 12 }, (_, i) => item(i)); items.splice(3, 0, item(99, { url: "https://evil.example/" })); items.push(item(50, { url: "" }));
