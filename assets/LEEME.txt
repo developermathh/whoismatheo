@@ -1,5 +1,5 @@
-Place the dedication GIF here as: dedication.gif
-(the dedication dialog loads assets/dedication.gif; if the file is missing the GIF area is simply hidden and the text stays centred)
+Place the dedication video here as: dedication.mp4
+(it plays muted and in a loop like a GIF; if the file is missing the media area is hidden and the text stays centred)
 
-Coloca aquí el GIF de la dedicatoria con el nombre: dedication.gif
-(la dedicatoria carga assets/dedication.gif; si el archivo no está, el área del GIF se oculta y el texto queda centrado)
+Coloca aqui el video de la dedicatoria con el nombre: dedication.mp4
+(se reproduce en bucle y sin sonido como un GIF; si el archivo no esta, el area se oculta y el texto queda centrado)

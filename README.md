@@ -110,7 +110,7 @@ Yo no puedo consultar tu producción, así que no he podido confirmar cuál de e
 ```
 node tests/api.test.js      # 28 pruebas: Lanyard, API de Discord y Redis SIMULADOS (registro, deduplicación, límite de 10, orden,
                             # persistencia tras "reiniciar", errores de red, datos incompletos, seguridad, ausencia de código de Spotify API)
-node tests/client.test.js   # 23 pruebas: script.js con DOM y WebSocket simulados (canción desde Discord, banner, insignias, carrusel,
+node tests/client.test.js   # 24 pruebas: script.js con DOM y WebSocket simulados (canción desde Discord, banner, insignias, carrusel,
                             # 5 idiomas, estados vacío/error, reproductor)
 ```
 Son pruebas **automatizadas y offline con mocks**. No demuestran que tu cuenta real funcione.
@@ -138,7 +138,7 @@ Raíz del repo: `index.html`, `style.css`, `script.js`, `api/`, `audio/`, `verce
 
 ## Dedicatoria, avatar y carrusel (v11)
 
-- **Dedicatoria** (corazón del pie de página): texto a la izquierda y GIF a la derecha en dos áreas iguales, centrada; en móvil, una columna con el texto primero y el GIF debajo. Sin título. El texto está en `CONFIG.dedicationMessage` (`script.js`). **El GIF debe estar en `assets/dedication.gif`** (usa `object-fit: contain`; si el archivo no existe, el área del GIF se oculta y el texto queda centrado).
+- **Dedicatoria** (corazón del pie de página): texto a la izquierda y video en bucle (sin sonido, como un GIF) a la derecha, en dos áreas iguales y centrada; en móvil, una columna con el texto primero y el video debajo. Sin título. El texto está en `CONFIG.dedicationMessage` (`script.js`). **El video debe estar en `assets/dedication.mp4`** (`object-fit: contain`; si el archivo no existe, el área se oculta y el texto queda centrado).
 - **Avatar de Discord**: se sube la altura del avatar + la mitad de su tamaño respecto al borde del banner, así el borde inferior del banner cruza siempre el centro del avatar (50 % / 50 %) en escritorio y móvil.
-- **Carrusel "escuchado recientemente"**: sección propia sin caja; portadas grandes y, debajo, canción, artistas y `duración · álbum`. No se muestra la hora de reproducción (`playedAt` sigue guardándose y viéndose en la API, solo que la web ya no la pinta).
+- **Carrusel "escuchado recientemente"**: sección propia sin caja, estilo **coverflow**: la canción activa va grande al centro y las vecinas se solapan a los lados (5 visibles en escritorio, 3 en móvil). Gira sin fin (tras la 10.ª vuelve la 1.ª) con flechas, puntos, deslizando con el dedo/ratón o tocando una portada lateral. Cada tarjeta mantiene portada, canción, artistas y `duración · álbum`; no se muestra la hora.
 - **Historial**: cada canción nueva guarda además `durationMs` (fin − inicio de los timestamps de Discord). Las canciones guardadas antes de esta versión no la tienen y se muestran sin duración; no hace falta migrar nada.

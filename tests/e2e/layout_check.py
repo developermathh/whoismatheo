@@ -13,7 +13,7 @@ def serve(port):
     h=functools.partial(Q,directory=ROOT); s=socketserver.ThreadingTCPServer(("127.0.0.1",port),h); s.allow_reuse_address=True
     threading.Thread(target=s.serve_forever,daemon=True).start(); return s
 ID="1356268956398387423"
-BANNER=open(os.path.join(HERE,"fixtures","banner.png"),"rb").read(); SQ=open(os.path.join(HERE,"fixtures","square.png"),"rb").read(); GIF=open(os.path.join(HERE,"fixtures","dedication-test.gif"),"rb").read()   # test GIF only: the real one is assets/dedication.gif
+BANNER=open(os.path.join(HERE,"fixtures","banner.png"),"rb").read(); SQ=open(os.path.join(HERE,"fixtures","square.png"),"rb").read()
 def items(n):
     return [{"id":"%022d"%i,"title":t,"artists":a,"album":"x","cover":"https://i.scdn.co/image/%d"%i,"url":"https://open.spotify.com/track/%022d"%i,"playedAt":"2026-10-29T0%d:10:00Z"%(9-i),"durationMs":180000+i*7000,"album":"Álbum %d con un nombre bastante largo para probar"%i} for i,(t,a) in enumerate([("Blinding Lights","The Weeknd"),("Очень длинное название песни которое не помещается","Исполнитель Один, Исполнитель Два"),("Une chanson avec un titre vraiment très très long à rallonge","Artiste Numéro Un, Artiste Numéro Deux"),("Song 4","A"),("Song 5","B"),("Song 6","C"),("Song 7","D"),("Song 8","E"),("Song 9","F"),("Song 10","G")][:n])]
 def run(scn, lang, w, h, shot=None, musicoff=True, bottom=None, banner=True, bio=None, spotify=True, kv=None, console=None, dedication=False):
@@ -30,7 +30,7 @@ def run(scn, lang, w, h, shot=None, musicoff=True, bottom=None, banner=True, bio
             u=r.request.url
             if "/api/profile" in u: r.fulfill(json=prof)
             elif "/api/recent" in u: r.fulfill(json={"items":items(10),"live":True})
-            elif "dedication.gif" in u: r.fulfill(body=GIF,content_type="image/gif")
+            elif "dedication.mp4" in u: r.fulfill(body=b"x",content_type="video/mp4")
             elif "banners" in u: r.fulfill(body=BANNER,content_type="image/png")
             elif "cdn.discordapp.com" in u or "scdn.co" in u: r.fulfill(body=SQ,content_type="image/png")
             elif "oembed" in u: r.fulfill(json={"thumbnail_url":"https://i.scdn.co/image/k"})
@@ -57,12 +57,13 @@ def run(scn, lang, w, h, shot=None, musicoff=True, bottom=None, banner=True, bio
           out.ov=getComputedStyle(document.querySelector('#banner'),'::after').content;out.bio=document.querySelector('#bio')?{hidden:document.querySelector('#bio').hidden,text:document.querySelector('#bio').innerText}:null;
           const clip=[...document.querySelectorAll('.nav a,.nav button,.meta *,.tag,#discord h2,#discord .muted,#discord .badges li,#about-text *,.row span')].filter(e=>e.scrollWidth>e.clientWidth+1&&getComputedStyle(e).overflow!=='visible'&&e.clientWidth>0).slice(0,8).map(e=>e.tagName+'#'+e.id+'.'+e.className+' '+e.scrollWidth+'>'+e.clientWidth+' "'+e.textContent.trim().slice(0,30)+'"');out.clipped=clip;return out}""")
         res.update(pg.evaluate("""()=>{const b=document.querySelector('#banner').getBoundingClientRect(),a=document.querySelector('.pf-who .avatar').getBoundingClientRect();
-          const h=document.querySelector('#hist'),c=h.children[0].getBoundingClientRect(),cv=h.children[0].querySelector('.cv').getBoundingClientRect();
-          return {avatarOverlap:+((b.bottom-a.top)/a.height).toFixed(3),avatarSize:Math.round(a.width),cards:h.children.length,cover:Math.round(cv.width),visibleCards:[...h.children].filter(li=>{const r=li.getBoundingClientRect();return r.left>=h.getBoundingClientRect().left-1&&r.right<=h.getBoundingClientRect().right+1}).length,histBox:getComputedStyle(document.querySelector('#history')).borderTopWidth,metaText:h.children[0].querySelector('.mt').innerText}}"""))
+          const h=document.querySelector('#hist'),hb=h.getBoundingClientRect(),cv=h.children[0].querySelector('.cv').getBoundingClientRect();
+          const vis=[...h.children].filter(li=>li.dataset.o&&Math.abs(+li.dataset.o)<=2&&getComputedStyle(li).opacity>0.9).map(li=>{const r=li.querySelector('.cv').getBoundingClientRect();return [li.dataset.o,Math.round(r.left),Math.round(r.right),Math.round(r.width)]});
+          return {avatarOverlap:+((b.bottom-a.top)/a.height).toFixed(3),avatarSize:Math.round(a.width),cards:h.children.length,cover:Math.round(cv.width),visibleCards:vis.length,vis:vis,stage:[Math.round(hb.left),Math.round(hb.right)],histBox:getComputedStyle(document.querySelector('#history')).borderTopWidth,metaText:h.children[0].querySelector('.mt').innerText}}"""))
         if dedication:
             pg.evaluate("document.querySelector('#secret').click()"); pg.wait_for_timeout(1200)
-            res['ded']=pg.evaluate("""()=>{const d=document.querySelector('#letter').getBoundingClientRect(),t=document.querySelector('#l-body').getBoundingClientRect(),g=document.querySelector('.ded-gif').getBoundingClientRect(),i=document.querySelector('#l-gif');
-              const W=innerWidth;return {dlgCentre:Math.round((d.left+d.right)/2-W/2),text:[Math.round(t.left),Math.round(t.width),Math.round(t.height)],gif:[Math.round(g.left),Math.round(g.width),Math.round(g.height)],fit:getComputedStyle(i).objectFit,sameWidth:Math.abs(t.width-g.width)<2,stacked:g.top>=t.bottom-1,title:!!document.querySelector('#letter h1,#letter h2,#letter h3'),scrollW:document.documentElement.scrollWidth,dlgScroll:document.querySelector('#letter').scrollWidth>document.querySelector('#letter').clientWidth+1,textAlign:getComputedStyle(document.querySelector('#l-body')).textAlign,gifLoaded:i.naturalWidth}}""")
+            res['ded']=pg.evaluate("""()=>{const d=document.querySelector('#letter').getBoundingClientRect(),t=document.querySelector('#l-body').getBoundingClientRect(),g=document.querySelector('.ded-gif').getBoundingClientRect(),i=document.querySelector('#l-vid');
+              const W=innerWidth;return {dlgCentre:Math.round((d.left+d.right)/2-W/2),text:[Math.round(t.left),Math.round(t.width),Math.round(t.height)],gif:[Math.round(g.left),Math.round(g.width),Math.round(g.height)],fit:getComputedStyle(i).objectFit,sameWidth:Math.abs(t.width-g.width)<2,stacked:g.top>=t.bottom-1,title:!!document.querySelector('#letter h1,#letter h2,#letter h3'),scrollW:document.documentElement.scrollWidth,dlgScroll:document.querySelector('#letter').scrollWidth>document.querySelector('#letter').clientWidth+1,textAlign:getComputedStyle(document.querySelector('#l-body')).textAlign}}""")
             if shot: pg.screenshot(path=shot.replace('.png','_ded.png'))
             pg.evaluate("document.querySelector('#close').click()"); pg.wait_for_timeout(700)
         if shot:

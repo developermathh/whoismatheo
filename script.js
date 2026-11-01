@@ -2,7 +2,7 @@
 const CONFIG = {
   discordUserId: "1356268956398387423", // string, never a number (Discord IDs exceed JS integer precision)          // your numeric Discord ID (join discord.gg/lanyard so Lanyard can see you)
   track: { src: "audio/the-kill-2.mp3", /* add your own authorized file at this path */ title: "The Kill 2", artist: "Lex Amarni & 2MuchMotion", cover: "" /* empty = fetched from Spotify oEmbed if reachable */, spotifyUrl: "https://open.spotify.com/track/1cvh28dmSvufqFqJe9LE3H" },
-  dedicationMessage: "Hay quienes pasan por la pantalla como una notificación más, y hay quienes se quedan porque de verdad le cambian el sentido a los días. Tú eres de los segundos. Gracias por las charlas que se alargaban sin planearlo, por estar siempre presente y por apoyar siempre, sin necesidad de pedir nada a cambio. Si tuviera que apartar un espacio exclusivo entre tanto ruido, pantallas y proyectos, este rincón es el que guardo para ti: un lugar permanente para alguien que vale la pena. Gracias por la amistad, Take.\n\n— Matheo"       // the dedication (same text in every language); empty = neutral placeholder. The GIF lives in assets/dedication.gif
+  dedicationMessage: "Hay quienes pasan por la pantalla como una notificación más, y hay quienes se quedan porque de verdad le cambian el sentido a los días. Tú eres de los segundos. Gracias por las charlas que se alargaban sin planearlo, por estar siempre presente y por apoyar siempre, sin necesidad de pedir nada a cambio. Si tuviera que apartar un espacio exclusivo entre tanto ruido, pantallas y proyectos, este rincón es el que guardo para ti: un lugar permanente para alguien que vale la pena. Gracias por la amistad, Take.\n\n— Matheo"       // the dedication (same text in every language); empty = neutral placeholder. The video lives in assets/dedication.mp4
 };
 /* ===== Translations: [en, es, ru, de, fr] ===== */
 const LANGS = ["en","es","ru","de","fr"];
@@ -272,10 +272,12 @@ function applyLang(){
   renderPresence(); renderPlayer(); renderHistoryState();
 }
 const dlg = $("#letter");
-$("#secret").onclick = e => { const b = e.currentTarget; b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); dlg.showModal(); }; $("#close").onclick = () => dlg.close();
+$("#secret").onclick = e => { const b = e.currentTarget; b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); dlg.showModal(); vidPlay(); }; $("#close").onclick = () => dlg.close();
 dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
-/* if assets/dedication.gif is missing the GIF area disappears and the text stays centred (no broken-image icon) */
-$("#l-gif").onerror = () => dlg.classList.add("no-gif"); $("#l-gif").onload = () => dlg.classList.remove("no-gif");
+/* the dedication media is a looping, muted video (behaves like a GIF). If assets/dedication.mp4 is missing the area disappears and the text stays centred */
+const vid = $("#l-vid"); vid.onerror = () => dlg.classList.add("no-gif"); vid.onloadeddata = () => dlg.classList.remove("no-gif");
+const vidPlay = () => { try { const p = vid.play && vid.play(); if (p && p.catch) p.catch(() => {}); } catch(e){} }, vidStop = () => { try { vid.pause && vid.pause(); } catch(e){} };
+dlg.addEventListener("close", vidStop);
 
 /* ===== Stars & motion ===== */
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -299,20 +301,30 @@ try { localStorage.setItem("seen", "1"); } catch(e){}
    States: loading -> ok | empty | error. Real data only: never invented tracks ===== */
 const hist = $("#hist"), histSec = $("#history"), histMsg = $("#hist-msg"), dots = $("#car-dots"), cPrev = $("#car-prev"), cNext = $("#car-next"); let histKey = "", histState = "loading", histBusy = false, cur = 0;
 const cards = () => [...hist.children];
-function step(){ const c = cards(); if (c.length < 2) return c[0] ? (c[0].offsetWidth || 0) : 0; return (c[1].offsetLeft - c[0].offsetLeft) || c[0].offsetWidth || 0; }
+/* Coverflow: the active song is big in the centre; its neighbours overlap on both sides and shrink; it loops (after the 10th comes the 1st).
+   data-o = distance from the centre (-3..3, shortest way round); CSS does the rest. */
 function carState(){
-  const c = cards(), st = step() || 1, max = Math.max(0, (hist.scrollWidth || 0) - (hist.clientWidth || 0));
-  cur = Math.min(c.length - 1, Math.max(0, Math.round((hist.scrollLeft || 0) / st)));
-  cPrev.disabled = !c.length || (hist.scrollLeft || 0) <= 1; cNext.disabled = !c.length || (hist.scrollLeft || 0) >= max - 1;
-  hist.dataset.l = cPrev.disabled ? "0" : "1"; hist.dataset.r = cNext.disabled ? "0" : "1"; /* CSS fades the edge that still has more songs behind it */
+  const c = cards(), n = c.length; if (!n){ cPrev.disabled = cNext.disabled = true; return; }
+  cur = ((cur % n) + n) % n;
+  c.forEach((li, i) => { let o = i - cur; if (o > n / 2) o -= n; else if (o < -n / 2) o += n;
+    li.dataset.o = String(Math.max(-3, Math.min(3, o))); li.setAttribute("aria-current", o === 0 ? "true" : "false"); if (li.children[0]) li.children[0].tabIndex = o === 0 ? 0 : -1; });
+  cPrev.disabled = cNext.disabled = n < 2;
   [...dots.children].forEach((d, i) => d.setAttribute("aria-current", i === cur ? "true" : "false"));
 }
-function goTo(i){ const c = cards(); if (!c.length) return; const k = Math.min(c.length - 1, Math.max(0, i)); try { hist.scrollTo({ left: k * step(), behavior: still ? "auto" : "smooth" }); } catch(e){ hist.scrollLeft = k * step(); } }
-function page(dir){ const per = Math.max(1, Math.floor((hist.clientWidth || 1) / (step() || 1))); goTo(cur + dir * per); }
+function goTo(i){ if (!cards().length) return; cur = i; carState(); }
+function page(dir){ goTo(cur + dir); }
 cPrev.onclick = () => page(-1); cNext.onclick = () => page(1);
-let carRaf = 0; hist.addEventListener("scroll", () => { if (!carRaf) carRaf = requestAnimationFrame(() => { carRaf = 0; carState(); }); }, { passive:true });
 hist.addEventListener("keydown", e => { if (e.key === "ArrowRight"){ e.preventDefault(); page(1); } else if (e.key === "ArrowLeft"){ e.preventDefault(); page(-1); } });
-addEventListener("resize", () => carState());
+/* swipe / drag on the stage; a click on a side cover brings it to the centre, a click on the centre cover opens it in Spotify */
+let px = null, dragged = false;
+hist.addEventListener("pointerdown", e => { px = e.clientX; dragged = false; });
+hist.addEventListener("pointercancel", () => { px = null; });
+hist.addEventListener("pointerup", e => { if (px === null) return; const dx = e.clientX - px; px = null; if (Math.abs(dx) > 40){ dragged = true; page(dx < 0 ? 1 : -1); setTimeout(() => { dragged = false; }, 60); } });
+hist.addEventListener("click", e => {
+  if (dragged){ e.preventDefault(); return; }
+  const li = e.target && e.target.closest ? e.target.closest("li") : null;
+  if (li && li.dataset.o !== "0"){ e.preventDefault(); const k = cards().indexOf(li); if (k >= 0) goTo(k); }
+});
 function renderHistoryState(){
   const m = histState === "ok" ? "" : tr(histState === "loading" ? "loading" : histState === "empty" ? "historyEmpty" : "historyError");
   histMsg.textContent = m; histMsg.hidden = !m; hist.hidden = histState !== "ok"; dots.hidden = histState !== "ok" || cards().length < 2; histSec.hidden = false; histSec.dataset.s = histState;
@@ -337,7 +349,7 @@ function renderHistory(items){
   if (key !== histKey){ histKey = key;
     hist.replaceChildren(...items.map(histCard));
     dots.replaceChildren(...items.map((_, k) => { const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", tr("song") + " " + (k + 1)); b.onclick = () => goTo(k); return b; }));
-    try { hist.scrollLeft = 0; } catch(e){} }
+    cur = 0; }
   renderHistoryState();
 }
 async function loadHistory(){ if (document.hidden || histBusy) return; histBusy = true;

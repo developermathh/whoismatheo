@@ -56,12 +56,12 @@ test("static: Music nav -> history section; carousel + banner elements exist; lo
   assert(!/api\.spotify\.com|accounts\.spotify\.com|\/api\/now|\/api\/spotify|refresh_token/.test(code)); assert(fs.existsSync(path.join(root, "audio/the-kill-2.mp3")) && code.includes('src: "audio/the-kill-2.mp3"'));
   assert(code.includes("wss://api.lanyard.rest/socket"), "the existing Discord (Lanyard) connection is still used");
 });
-test("dedication: exact text, GIF slot at assets/dedication.gif (contain), no title; carousel is its own section (no card box)", () => {
+test("dedication: exact text, looping muted video slot at assets/dedication.mp4 (contain), no title; carousel is its own section (no card box)", () => {
   const text = "Hay quienes pasan por la pantalla como una notificación más, y hay quienes se quedan porque de verdad le cambian el sentido a los días. Tú eres de los segundos. Gracias por las charlas que se alargaban sin planearlo, por estar siempre presente y por apoyar siempre, sin necesidad de pedir nada a cambio. Si tuviera que apartar un espacio exclusivo entre tanto ruido, pantallas y proyectos, este rincón es el que guardo para ti: un lugar permanente para alguien que vale la pena. Gracias por la amistad, Take.\n\n— Matheo";
   const cfg = vm.runInNewContext("(" + code.match(/const CONFIG = (\{[\s\S]*?\n\});/)[1] + ")"); assert.equal(cfg.dedicationMessage, text);
   const dlg = html.slice(html.indexOf('<dialog id="letter"'), html.indexOf("</dialog>"));
-  assert(!/<h[1-6]/.test(dlg) && !dlg.includes("l-title") && !dlg.includes("letterFor"), "no title in the dedication"); assert(dlg.includes('src="assets/dedication.gif"') && dlg.includes('id="l-body"'));
-  const css = fs.readFileSync(path.join(root, "style.css"), "utf8"); assert(/\.ded-gif img\{[^}]*object-fit:contain/.test(css)); assert(/\.ded\{[^}]*grid-template-columns:1fr 1fr/.test(css)); assert(/@media\(max-width:767px\)\{[^]*\.ded\{grid-template-columns:1fr/.test(css));
+  assert(!/<h[1-6]/.test(dlg) && !dlg.includes("l-title") && !dlg.includes("letterFor"), "no title in the dedication"); assert(dlg.includes('<video') && dlg.includes('src="assets/dedication.mp4"') && /\bmuted\b/.test(dlg) && /\bloop\b/.test(dlg) && /playsinline/.test(dlg) && dlg.includes('id="l-body"') && !dlg.includes('.gif'));
+  const css = fs.readFileSync(path.join(root, "style.css"), "utf8"); assert(/\.ded-gif video\{[^}]*object-fit:contain/.test(css)); assert(/\.ded\{[^}]*grid-template-columns:1fr 1fr/.test(css)); assert(/@media\(max-width:767px\)\{[^]*\.ded\{grid-template-columns:1fr/.test(css));
   assert(!/<section id="history" class="[^"]*\bcard\b/.test(html), "history is not a card"); assert(!html.includes("<time"));
 });
 test("current song comes from Discord presence: label, title + Spotify link, artists, album, cover, progress, indicator; no Spotify API requests", async () => {
@@ -148,12 +148,19 @@ test("carousel: fewer than 10 shows only those; empty -> message; error -> messa
   rec.cur = resp({ error: "x" }, 502); await p.fire("visibilitychange"); assert.equal(p.$("#hist").children.length, 1, "last good list kept on a transient error"); assert.equal(p.$("#hist-msg").hidden, true);
   rec.cur = { ok: true, status: 200, headers: { get: () => null }, json: async () => { throw new Error("bad json"); } }; await p.fire("visibilitychange"); assert.equal(p.$("#hist").children.length, 1);
 });
-test("carousel: arrows move by a page and disable at the ends; dots follow the position", async () => {
-  const items = Array.from({ length: 10 }, (_, i) => item(i)); const p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items })) }), h = p.$("#hist");
-  h.children.forEach((c, i) => { c.offsetLeft = i * 200; c.offsetWidth = 190; }); h.scrollWidth = 2000; h.clientWidth = 820; await p.fire("resize");
-  assert.equal(p.$("#car-prev").disabled, true); assert.equal(p.$("#car-next").disabled, false); p.$("#car-next").onclick(); assert.equal(h.scrollLeft, 800, "4 cards per page");
-  h.scrollLeft = 1180; await p.fire("resize"); assert.equal(p.$("#car-next").disabled, true); assert.equal(p.$("#car-prev").disabled, false); assert.equal(p.$("#car-dots").children[6].getAttribute("aria-current"), "true");
-  p.$("#car-dots").children[2].onclick(); assert.equal(h.scrollLeft, 400);
+test("coverflow: newest in the centre, neighbours overlap on both sides, arrows loop endlessly, dots and side-cover clicks move the centre", async () => {
+  const items = Array.from({ length: 10 }, (_, i) => item(i)); const p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items })) }), L = p.$("#hist").children, o = () => L.map(li => li.dataset.o).join(",");
+  assert.equal(o(), "0,1,2,3,3,3,-3,-3,-2,-1", "song 1 centred, 2-3 on the right, 9-10 on the left (shortest way round)");
+  assert.equal(L[0].getAttribute("aria-current"), "true"); assert.equal(L[0].children[0].tabIndex, 0); assert.equal(L[1].children[0].tabIndex, -1);
+  assert.equal(p.$("#car-prev").disabled, false); assert.equal(p.$("#car-next").disabled, false, "endless: never disabled with 2+ songs");
+  p.$("#car-next").onclick(); assert.equal(L[1].dataset.o, "0"); assert.equal(L[0].dataset.o, "-1"); assert.equal(p.$("#car-dots").children[1].getAttribute("aria-current"), "true");
+  p.$("#car-prev").onclick(); p.$("#car-prev").onclick(); assert.equal(L[9].dataset.o, "0", "prev from the first wraps to the last"); assert.equal(L[0].dataset.o, "1");
+  p.$("#car-dots").children[4].onclick(); assert.equal(L[4].dataset.o, "0"); assert.equal(p.$("#car-dots").children[4].getAttribute("aria-current"), "true");
+  for (let k = 0; k < 6; k++) p.$("#car-next").onclick(); assert.equal(L[0].dataset.o, "0", "after 10 steps it is back at the start");
+});
+test("coverflow: a single song has no arrows to press and no dots; the page never needs horizontal scrolling logic", async () => {
+  const p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)] })) }); assert.equal(p.$("#hist").children[0].dataset.o, "0"); assert.equal(p.$("#car-next").disabled, true); assert.equal(p.$("#car-dots").hidden, true);
+  assert(!/scrollLeft|scrollTo/.test(code.slice(code.indexOf("Recently played carousel"))), "no scroll-based carousel code left");
 });
 test("no request while the tab is hidden; one immediate refresh when it becomes visible", async () => {
   const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); const count = () => p.fetched.filter(u => u === "/api/recent").length; const n0 = count();
