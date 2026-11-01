@@ -60,11 +60,17 @@ test("recent: nothing playing -> 200 with an empty list (nothing invented)", asy
 test("recent: new song is recorded with title, artists, album, cover, Spotify link built from the track id (no Spotify API call)", async () => {
   reset(); const r = await play("0VjIjW4GlUZAMYd2vXMi3b", "Blinding Lights"); const i = r.json.items[0];
   assert.equal(r.status, 200); assert.equal(r.json.items.length, 1);
-  assert.deepEqual(Object.keys(i).sort(), ["album", "artists", "cover", "id", "playedAt", "title", "url"]);   /* internal fields (timestamps) are not leaked */
+  assert.deepEqual(Object.keys(i).sort(), ["album", "artists", "cover", "durationMs", "id", "playedAt", "title", "url"]);   /* internal fields (raw timestamps) are not leaked */
+  assert.equal(i.durationMs, 200000, "track length = Discord end - start");
   assert.equal(i.title, "Blinding Lights"); assert.equal(i.artists, "Artist A, Artist B"); assert.equal(i.album, "Alb"); assert.equal(i.cover, "https://i.scdn.co/image/0VjIjW4GlUZAMYd2vXMi3b");
   assert.equal(i.url, "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b"); assert(!isNaN(new Date(i.playedAt)));
   assert(calls.every(c => !/spotify\.com\/v1|accounts\.spotify/.test(c.url)), "no Spotify Web API / OAuth call");
   assert(!JSON.stringify(r.json).includes("REDIS_TOKEN_secret"));
+});
+test("recent: durationMs - missing/invalid timestamps and entries saved before this field existed give 0 (unknown), never a made-up value", async () => {
+  reset(); const A = "A".repeat(22); let r = await play(A, "A", { timestamps: { start: 1_000_000 } }); assert.equal(r.json.items[0].durationMs, 0);
+  db.data.set("whoismatheo:recent-plays", JSON.stringify([{ id: "B".repeat(22), title: "Old", artists: "x", album: "", cover: "", url: "", playedAt: new Date().toISOString(), startMs: 1, endMs: 2 }]));
+  lan.spotify = null; r = await recent(); assert.equal(r.json.items[0].title, "Old"); assert.equal(r.json.items[0].durationMs, 0);
 });
 test("recent: dedup - the same song still playing across many calls is recorded once", async () => { reset(); for (let n = 0; n < 5; n++) await play("A".repeat(22), "Song A"); const r = await recent(); assert.deepEqual(ids(r), ["A".repeat(22)]); });
 test("recent: A, B, A -> A recorded again as a NEW event after other songs; newest first", async () => {

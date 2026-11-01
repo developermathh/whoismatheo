@@ -1,4 +1,4 @@
-/* GET /api/recent  ->  { items: [{ id, title, artists, album, cover, url, playedAt }], live }   (newest first, at most 10)
+/* GET /api/recent  ->  { items: [{ id, title, artists, album, cover, url, playedAt, durationMs }], live }   (durationMs: 0 = unknown)   (newest first, at most 10)
    Each call also checks what Discord says you are listening to and records a new play if there is one (see _lib/sync.js).
    Failure: { error: storage_not_configured | storage_unreachable | storage_error | unavailable } */
 const { sendJson, allowGet, sendError } = require("./_lib/http");

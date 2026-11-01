@@ -2,7 +2,7 @@
 const CONFIG = {
   discordUserId: "1356268956398387423", // string, never a number (Discord IDs exceed JS integer precision)          // your numeric Discord ID (join discord.gg/lanyard so Lanyard can see you)
   track: { src: "audio/the-kill-2.mp3", /* add your own authorized file at this path */ title: "The Kill 2", artist: "Lex Amarni & 2MuchMotion", cover: "" /* empty = fetched from Spotify oEmbed if reachable */, spotifyUrl: "https://open.spotify.com/track/1cvh28dmSvufqFqJe9LE3H" },
-  dedicationMessage: ""       // your letter for iTake; empty = neutral placeholder
+  dedicationMessage: "Hay quienes pasan por la pantalla como una notificación más, y hay quienes se quedan porque de verdad le cambian el sentido a los días. Tú eres de los segundos. Gracias por las charlas que se alargaban sin planearlo, por estar siempre presente y por apoyar siempre, sin necesidad de pedir nada a cambio. Si tuviera que apartar un espacio exclusivo entre tanto ruido, pantallas y proyectos, este rincón es el que guardo para ti: un lugar permanente para alguien que vale la pena. Gracias por la amistad, Take.\n\n— Matheo"       // the dedication (same text in every language); empty = neutral placeholder. The GIF lives in assets/dedication.gif
 };
 /* ===== Translations: [en, es, ru, de, fr] ===== */
 const LANGS = ["en","es","ru","de","fr"];
@@ -50,6 +50,7 @@ const T = {
  prev:["Previous","Anterior","Назад","Zurück","Précédent"],
  next:["Next","Siguiente","Вперёд","Weiter","Suivant"],
  song:["Song","Canción","Песня","Titel","Titre"],
+ duration:["Duration","Duración","Длительность","Dauer","Durée"],
  badges:["Badges","Insignias","Значки","Abzeichen","Badges"],
  b_staff:["Discord Staff","Personal de Discord","Сотрудник Discord","Discord-Mitarbeiter","Employé Discord"],
  b_partner:["Partnered Server Owner","Propietario de servidor asociado","Владелец партнёрского сервера","Partner-Server-Inhaber","Propriétaire de serveur partenaire"],
@@ -273,6 +274,8 @@ function applyLang(){
 const dlg = $("#letter");
 $("#secret").onclick = e => { const b = e.currentTarget; b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); dlg.showModal(); }; $("#close").onclick = () => dlg.close();
 dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+/* if assets/dedication.gif is missing the GIF area disappears and the text stays centred (no broken-image icon) */
+$("#l-gif").onerror = () => dlg.classList.add("no-gif"); $("#l-gif").onload = () => dlg.classList.remove("no-gif");
 
 /* ===== Stars & motion ===== */
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -295,15 +298,13 @@ try { localStorage.setItem("seen", "1"); } catch(e){}
 /* ===== Recently played carousel: GET /api/recent (the server records new songs from Discord and returns the stored last 10).
    States: loading -> ok | empty | error. Real data only: never invented tracks ===== */
 const hist = $("#hist"), histSec = $("#history"), histMsg = $("#hist-msg"), dots = $("#car-dots"), cPrev = $("#car-prev"), cNext = $("#car-next"); let histKey = "", histState = "loading", histBusy = false, cur = 0;
-function fmtPlayed(iso){ const d = new Date(iso); if (isNaN(d)) return ""; const today = d.toDateString() === new Date().toDateString();
-  try { return new Intl.DateTimeFormat(lang, today ? { hour:"2-digit", minute:"2-digit" } : { day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }).format(d); } catch(e){ return d.toLocaleString(); } }
-function updateHistTimes(){ hist.querySelectorAll("time[datetime]").forEach(t => { const iso = t.getAttribute("datetime"), d = new Date(iso); t.textContent = fmtPlayed(iso); t.title = isNaN(d) ? "" : d.toLocaleString(lang); }); }
 const cards = () => [...hist.children];
 function step(){ const c = cards(); if (c.length < 2) return c[0] ? (c[0].offsetWidth || 0) : 0; return (c[1].offsetLeft - c[0].offsetLeft) || c[0].offsetWidth || 0; }
 function carState(){
   const c = cards(), st = step() || 1, max = Math.max(0, (hist.scrollWidth || 0) - (hist.clientWidth || 0));
   cur = Math.min(c.length - 1, Math.max(0, Math.round((hist.scrollLeft || 0) / st)));
   cPrev.disabled = !c.length || (hist.scrollLeft || 0) <= 1; cNext.disabled = !c.length || (hist.scrollLeft || 0) >= max - 1;
+  hist.dataset.l = cPrev.disabled ? "0" : "1"; hist.dataset.r = cNext.disabled ? "0" : "1"; /* CSS fades the edge that still has more songs behind it */
   [...dots.children].forEach((d, i) => d.setAttribute("aria-current", i === cur ? "true" : "false"));
 }
 function goTo(i){ const c = cards(); if (!c.length) return; const k = Math.min(c.length - 1, Math.max(0, i)); try { hist.scrollTo({ left: k * step(), behavior: still ? "auto" : "smooth" }); } catch(e){ hist.scrollLeft = k * step(); } }
@@ -315,16 +316,26 @@ addEventListener("resize", () => carState());
 function renderHistoryState(){
   const m = histState === "ok" ? "" : tr(histState === "loading" ? "loading" : histState === "empty" ? "historyEmpty" : "historyError");
   histMsg.textContent = m; histMsg.hidden = !m; hist.hidden = histState !== "ok"; dots.hidden = histState !== "ok" || cards().length < 2; histSec.hidden = false; histSec.dataset.s = histState;
-  $("#car-prev").parentNode.hidden = histState !== "ok"; updateHistTimes(); carState();
+  $("#car-prev").parentNode.hidden = histState !== "ok"; carState();
+}
+/* one record of the collection: big cover, then title / artists / duration · album. The time of the play is deliberately not shown. */
+function histCard(i){
+  const li = document.createElement("li"), a = document.createElement("a"), cv = document.createElement("div"), t = document.createElement("strong"), r = document.createElement("span"), m = document.createElement("span");
+  if (i.url){ a.href = i.url; a.target = "_blank"; a.rel = "noopener"; a.setAttribute("data-i18n-title", "openSpotify"); a.title = tr("openSpotify"); }
+  cv.className = "cv";
+  if (/^https:\/\//.test(i.cover || "")){ const im = document.createElement("img"); im.src = i.cover; im.alt = ""; im.width = im.height = 300; im.loading = "lazy"; im.decoding = "async"; im.onerror = () => { im.remove(); cv.classList.add("ph"); }; cv.appendChild(im); } else cv.classList.add("ph");
+  t.textContent = i.title; r.className = "ar"; r.textContent = i.artists || "";
+  m.className = "mt"; const ms = +i.durationMs, d = isFinite(ms) && ms >= 1000 && ms <= 6 * 3600e3 ? fmt(ms / 1000) : "", al = typeof i.album === "string" ? i.album : "";
+  if (d){ const ds = document.createElement("b"); ds.textContent = d; ds.setAttribute("data-i18n-title", "duration"); ds.title = tr("duration"); m.appendChild(ds); }
+  if (al){ const alb = document.createElement("em"); alb.textContent = al; m.appendChild(alb); }
+  m.hidden = !d && !al;
+  a.append(cv, t, r, m); li.appendChild(a); return li;
 }
 function renderHistory(items){
   histState = items.length ? "ok" : "empty";
   const key = items.map(i => i.id + "@" + (i.playedAt || "")).join(","); /* same track played twice = two plays */
   if (key !== histKey){ histKey = key;
-    hist.replaceChildren(...items.map(i => { const li = document.createElement("li"), a = document.createElement("a"), t = document.createElement("strong"), r = document.createElement("span"), tm = document.createElement("time");
-      if (i.url){ a.href = i.url; a.target = "_blank"; a.rel = "noopener"; a.setAttribute("data-i18n-title", "openSpotify"); a.title = tr("openSpotify"); }
-      if (/^https:\/\//.test(i.cover || "")){ const im = document.createElement("img"); im.src = i.cover; im.alt = ""; im.width = im.height = 240; im.loading = "lazy"; im.decoding = "async"; a.appendChild(im); } else a.appendChild(document.createElement("div")).className = "ph";
-      t.textContent = i.title; r.textContent = i.artists || ""; if (i.playedAt && !isNaN(new Date(i.playedAt))) tm.setAttribute("datetime", i.playedAt); a.append(t, r, tm); li.appendChild(a); return li; }));
+    hist.replaceChildren(...items.map(histCard));
     dots.replaceChildren(...items.map((_, k) => { const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", tr("song") + " " + (k + 1)); b.onclick = () => goTo(k); return b; }));
     try { hist.scrollLeft = 0; } catch(e){} }
   renderHistoryState();

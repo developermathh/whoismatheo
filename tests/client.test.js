@@ -12,7 +12,7 @@ class El {
   setAttribute(k, v) { this._a[k] = String(v); } getAttribute(k) { return k in this._a ? this._a[k] : null; } removeAttribute(k) { delete this._a[k]; }
   appendChild(n) { this.children.push(n); return n; } append(...n) { this.children.push(...n); } replaceChildren(...n) { this.children = n; }
   querySelectorAll(sel) { const out = []; (function w(e) { for (const c of e.children) { if (sel === "time[datetime]" ? c.tagName === "time" && "datetime" in c._a : false) out.push(c); w(c); } })(this); return out; }
-  addEventListener() {} scrollTo(o) { this.scrollLeft = o.left; } focus() {} showModal() {} close() {} getBoundingClientRect() { return { left: 100 }; }
+  addEventListener() {} remove() {} scrollTo(o) { this.scrollLeft = o.left; } focus() {} showModal() {} close() {} getBoundingClientRect() { return { left: 100 }; }
   text() { return this.textContent + this.children.map(c => (typeof c === "string" ? c : c.text())).join(""); }
 }
 const tick = (ms = 30) => new Promise(r => setTimeout(r, ms));
@@ -46,7 +46,7 @@ const ID = "1356268956398387423", TID = "0VjIjW4GlUZAMYd2vXMi3b";
 const user = { id: ID, username: "matheo", global_name: "Matheo", avatar: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4" };
 const pres = (extra) => Object.assign({ discord_user: user, discord_status: "online", activities: [], listening_to_spotify: false, spotify: null }, extra);
 const spot = (o) => Object.assign({ track_id: TID, song: "Blinding Lights", artist: "The Weeknd; Other", album: "After Hours", album_art_url: "https://i.scdn.co/image/abc", timestamps: { start: Date.now() - 61000, end: Date.now() + 139000 } }, o);
-const item = (i, extra) => Object.assign({ id: "h" + i, title: "Song " + i, artists: "Art", cover: "https://i.scdn.co/c" + i, url: "https://open.spotify.com/track/h" + i, playedAt: new Date(Date.UTC(2026, 9, 27, 12, 0) - i * 3600e3).toISOString() }, extra);
+const item = (i, extra) => Object.assign({ id: "h" + i, title: "Song " + i, artists: "Art", album: "Album " + i, durationMs: 200000 + i * 1000, cover: "https://i.scdn.co/c" + i, url: "https://open.spotify.com/track/h" + i, playedAt: new Date(Date.UTC(2026, 9, 27, 12, 0) - i * 3600e3).toISOString() }, extra);
 const profile = (o) => resp(Object.assign({ id: ID, username: "matheo", displayName: "Matheo", avatar: "https://cdn.discordapp.com/avatars/" + ID + "/x.png?size=256", avatarStatic: "https://cdn.discordapp.com/avatars/" + ID + "/x.png?size=256", decoration: "", banner: null, accentColor: "", badges: [], bannerSource: "no_token" }, o));
 
 let passed = 0; const tests = []; const test = (n, f) => tests.push([n, f]);
@@ -55,6 +55,14 @@ test("static: Music nav -> history section; carousel + banner elements exist; lo
   assert(html.includes('<a href="#history" data-i18n="music"></a>')); for (const id of ["history", "hist", "car-prev", "car-next", "car-dots", "banner", "banner-img", "badges", "custom", "av-deco", "spotify"]) assert(html.includes('id="' + id + '"'), "missing #" + id);
   assert(!/api\.spotify\.com|accounts\.spotify\.com|\/api\/now|\/api\/spotify|refresh_token/.test(code)); assert(fs.existsSync(path.join(root, "audio/the-kill-2.mp3")) && code.includes('src: "audio/the-kill-2.mp3"'));
   assert(code.includes("wss://api.lanyard.rest/socket"), "the existing Discord (Lanyard) connection is still used");
+});
+test("dedication: exact text, GIF slot at assets/dedication.gif (contain), no title; carousel is its own section (no card box)", () => {
+  const text = "Hay quienes pasan por la pantalla como una notificación más, y hay quienes se quedan porque de verdad le cambian el sentido a los días. Tú eres de los segundos. Gracias por las charlas que se alargaban sin planearlo, por estar siempre presente y por apoyar siempre, sin necesidad de pedir nada a cambio. Si tuviera que apartar un espacio exclusivo entre tanto ruido, pantallas y proyectos, este rincón es el que guardo para ti: un lugar permanente para alguien que vale la pena. Gracias por la amistad, Take.\n\n— Matheo";
+  const cfg = vm.runInNewContext("(" + code.match(/const CONFIG = (\{[\s\S]*?\n\});/)[1] + ")"); assert.equal(cfg.dedicationMessage, text);
+  const dlg = html.slice(html.indexOf('<dialog id="letter"'), html.indexOf("</dialog>"));
+  assert(!/<h[1-6]/.test(dlg) && !dlg.includes("l-title") && !dlg.includes("letterFor"), "no title in the dedication"); assert(dlg.includes('src="assets/dedication.gif"') && dlg.includes('id="l-body"'));
+  const css = fs.readFileSync(path.join(root, "style.css"), "utf8"); assert(/\.ded-gif img\{[^}]*object-fit:contain/.test(css)); assert(/\.ded\{[^}]*grid-template-columns:1fr 1fr/.test(css)); assert(/@media\(max-width:767px\)\{[^]*\.ded\{grid-template-columns:1fr/.test(css));
+  assert(!/<section id="history" class="[^"]*\bcard\b/.test(html), "history is not a card"); assert(!html.includes("<time"));
 });
 test("current song comes from Discord presence: label, title + Spotify link, artists, album, cover, progress, indicator; no Spotify API requests", async () => {
   const p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot() }), profile: NOPROF(), recent: NOREC() });
@@ -115,11 +123,22 @@ test("carousel: up to 10, newest first, cover/title/artist/time/link; entries wi
   const items = Array.from({ length: 12 }, (_, i) => item(i)); items.splice(3, 0, item(99, { url: "https://evil.example/" })); items.push(item(50, { url: "" }));
   const p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items })) }); const lis = p.$("#hist").children;
   assert.equal(lis.length, 10); assert.deepEqual(lis.map(li => li.children[0].children[1].textContent).slice(0, 4), ["Song 0", "Song 1", "Song 2", "Song 4"].map((x, k) => k === 3 ? "Song 3" : x).slice(0, 3).concat(["Song 3"]));
-  const a = lis[0].children[0]; assert.equal(a.href, "https://open.spotify.com/track/h0"); assert.equal(a.children[0].src, "https://i.scdn.co/c0"); assert.equal(a.children[3].tagName, "time"); assert(a.children[3].getAttribute("datetime").startsWith("2026-10-27T12:00")); assert(a.children[3].textContent.length > 0);
+  const a = lis[0].children[0]; assert.equal(a.href, "https://open.spotify.com/track/h0"); assert.equal(a.children[0].className, "cv"); assert.equal(a.children[0].children[0].src, "https://i.scdn.co/c0", "cover is the first, main element");
+  assert.equal(a.children[1].textContent, "Song 0"); assert.equal(a.children[2].textContent, "Art"); const m = a.children[3]; assert.equal(m.hidden, false); assert.equal(m.children[0].textContent, "3:20", "duration m:ss"); assert.equal(m.children[1].textContent, "Album 0");
+  assert(!a.children.some(c => c.tagName === "time") && !JSON.stringify(a.text()).match(/\d{1,2}:\d{2}\s?(AM|PM)/i), "the time a song was played is NOT shown");
   assert.equal(p.$("#hist").hidden, false); assert.equal(p.$("#hist-msg").hidden, true); assert.equal(p.$("#history").hidden, false); assert.equal(p.$("#car-dots").children.length, 10); assert.equal(p.$("#car-dots").hidden, false);
 });
 test("carousel: a repeated song after others is shown twice (two plays)", async () => {
   const items = [item(1, { id: "A" }), item(2, { id: "B" }), item(3, { id: "A" })]; const p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items })) }); assert.equal(p.$("#hist").children.length, 3);
+});
+test("carousel: songs without duration/album (older entries) still render cleanly; a broken cover falls back to a placeholder; bad durations are ignored", async () => {
+  const items = [item(1, { durationMs: undefined, album: "" }), item(2, { durationMs: 0 }), item(3, { durationMs: 99999999999 }), item(4, { cover: "" }), item(5, { durationMs: 61000, album: "" })];
+  const p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items })) }), lis = p.$("#hist").children;
+  assert.equal(lis.length, 5); assert.equal(lis[0].children[0].children[3].hidden, true, "no duration + no album -> no empty meta line");
+  assert.equal(lis[1].children[0].children[3].children.length, 1); assert.equal(lis[1].children[0].children[3].children[0].tagName, "em", "album only");
+  assert.equal(lis[2].children[0].children[3].children[0].tagName, "em", "absurd duration ignored"); assert(lis[3].children[0].children[0].classList.contains("ph"), "no cover -> placeholder");
+  assert.equal(lis[4].children[0].children[3].children[0].textContent, "1:01", "duration only"); assert.equal(lis[4].children[0].children[3].children.length, 1);
+  const im = lis[0].children[0].children[0].children[0]; im.onerror(); assert(lis[0].children[0].children[0].classList.contains("ph"), "broken cover image -> placeholder");
 });
 test("carousel: fewer than 10 shows only those; empty -> message; error -> message, then recovers; a failure keeps the last good carousel", async () => {
   let p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)] })) }); assert.equal(p.$("#hist").children.length, 1); assert.equal(p.$("#car-dots").hidden, true);
@@ -145,7 +164,7 @@ test("languages: every text has 5 non-empty translations; ALL original translati
   const T = grab(code), O = JSON.parse(fs.readFileSync(path.join(__dirname, "original-translations.json"), "utf8")); /* snapshot of the translations before this work */
   for (const k of Object.keys(O)) assert.deepEqual(T[k], O[k], "original translation changed: " + k);
   for (const [k, v] of Object.entries(T)) { assert.equal(v.length, 5, k); v.forEach(x => assert(typeof x === "string" && x.trim(), k + " empty")); }
-  for (const k of ["prev", "next", "song", "badges", "history", "historyEmpty", "historyError", "nothingPlaying", "listening", "openSpotify", "loading", "online", "idle", "dnd", "offline", "noActivity"]) assert(T[k], "missing " + k);
+  for (const k of ["prev", "next", "song", "duration", "badges", "history", "historyEmpty", "historyError", "nothingPlaying", "listening", "openSpotify", "loading", "online", "idle", "dnd", "offline", "noActivity"]) assert(T[k], "missing " + k);
   assert(Object.keys(T).filter(k => k.startsWith("b_")).length >= 12); assert.deepEqual(T.history, ["recently played", "escuchado recientemente", "недавно прослушано", "zuletzt gehört", "écouté récemment"]);
   assert(/data-i18n-label="prev"/.test(html) && /data-i18n-label="next"/.test(html));
 });

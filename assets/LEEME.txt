@@ -1,0 +1,5 @@
+Place the dedication GIF here as: dedication.gif
+(the dedication dialog loads assets/dedication.gif; if the file is missing the GIF area is simply hidden and the text stays centred)
+
+Coloca aquí el GIF de la dedicatoria con el nombre: dedication.gif
+(la dedicatoria carga assets/dedication.gif; si el archivo no está, el área del GIF se oculta y el texto queda centrado)
