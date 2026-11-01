@@ -58,11 +58,23 @@ test("static: Music nav -> history section; carousel + banner elements exist; lo
 });
 test("dedication: exact text, looping muted video slot at assets/dedication.mp4 (contain), no title; carousel is its own section (no card box)", () => {
   const text = "Hay quienes pasan por la pantalla como una notificación más, y hay quienes se quedan porque de verdad le cambian el sentido a los días. Tú eres de los segundos. Gracias por las charlas que se alargaban sin planearlo, por estar siempre presente y por apoyar siempre, sin necesidad de pedir nada a cambio. Si tuviera que apartar un espacio exclusivo entre tanto ruido, pantallas y proyectos, este rincón es el que guardo para ti: un lugar permanente para alguien que vale la pena. Gracias por la amistad, Take.\n\n— Matheo";
-  const cfg = vm.runInNewContext("(" + code.match(/const CONFIG = (\{[\s\S]*?\n\});/)[1] + ")"); assert.equal(cfg.dedicationMessage, text);
+  const T = vm.runInNewContext("(" + code.match(/const T = (\{[\s\S]*?\n\});/)[1] + ")"); assert.equal(T.dedication[1], text, "Spanish text exactly as written");
+  for (let i = 0; i < 5; i++) { assert(T.dedication[i].length > 300 && T.dedication[i].endsWith("— Matheo") && /Take\./.test(T.dedication[i]), "dedication translated in language " + i); } assert.equal(new Set(T.dedication).size, 5, "five different texts");
+  const cfg = vm.runInNewContext("(" + code.match(/const CONFIG = (\{[\s\S]*?\n\});/)[1] + ")"); assert.equal(cfg.dedicationMessage, "", "empty = use the translations");
   const dlg = html.slice(html.indexOf('<dialog id="letter"'), html.indexOf("</dialog>"));
   assert(!/<h[1-6]/.test(dlg) && !dlg.includes("l-title") && !dlg.includes("letterFor"), "no title in the dedication"); assert(dlg.includes('<video') && dlg.includes('src="assets/dedication.mp4"') && /\bmuted\b/.test(dlg) && /\bloop\b/.test(dlg) && /playsinline/.test(dlg) && dlg.includes('id="l-body"') && !dlg.includes('.gif'));
   const css = fs.readFileSync(path.join(root, "style.css"), "utf8"); assert(/\.ded-gif video\{[^}]*object-fit:contain/.test(css)); assert(/\.ded\{[^}]*grid-template-columns:1fr 1fr/.test(css)); assert(/@media\(max-width:767px\)\{[^]*\.ded\{grid-template-columns:1fr/.test(css));
   assert(!/<section id="history" class="[^"]*\bcard\b/.test(html), "history is not a card"); assert(!html.includes("<time"));
+});
+test("dedication is rendered in the active language (all 5)", async () => {
+  const T = vm.runInNewContext("(" + code.match(/const T = (\{[\s\S]*?\n\});/)[1] + ")");
+  for (const [i, lang] of ["en", "es", "ru", "de", "fr"].entries()) { const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), lang }); assert.equal(p.$("#l-body").textContent, T.dedication[i], "dedication in " + lang); }
+});
+test("spotify: when Lanyard's parsed `spotify` object is missing, the raw Discord activity (type 2) is used", async () => {
+  const act = { type: 2, id: "spotify:1", name: "Spotify", details: "Raw Song", state: "A; B", sync_id: "T".repeat(22), assets: { large_image: "spotify:ab67616d0000b27364840995fe43bb2ec73a241d", large_text: "Raw Album" }, timestamps: { start: 1000, end: 181000 } };
+  const p = await boot({ presence: pres({ activities: [act], listening_to_spotify: false, spotify: null }), profile: NOPROF(), recent: NOREC() });
+  assert.equal(p.$("#sp-song").textContent, "Raw Song"); assert.equal(p.$("#sp-song").href, "https://open.spotify.com/track/" + "T".repeat(22)); assert.equal(p.$("#sp-art").src, "https://i.scdn.co/image/ab67616d0000b27364840995fe43bb2ec73a241d");
+  const q = await boot({ presence: pres({ activities: [{ type: 2, name: "Not Spotify", details: "x" }, { type: 0, name: "Spotify", details: "game" }] }), profile: NOPROF(), recent: NOREC() }); assert.notEqual(q.$("#sp-song").textContent, "x"); assert.notEqual(q.$("#sp-song").textContent, "game");
 });
 test("current song comes from Discord presence: label, title + Spotify link, artists, album, cover, progress, indicator; no Spotify API requests", async () => {
   const p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot() }), profile: NOPROF(), recent: NOREC() });

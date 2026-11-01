@@ -23,8 +23,15 @@ async function fetchPresence(userId) {
 }
 
 /* The Spotify activity exactly as Discord reports it, or null. Nothing is invented: missing fields stay empty. */
+function spotifyActivity(data) {   /* fallback: the raw Discord activity (type 2 "Spotify") when Lanyard's parsed `spotify` object is missing */
+  const a = data && Array.isArray(data.activities) ? data.activities.find(x => x && x.type === 2 && (x.id === "spotify:1" || x.name === "Spotify")) : null;
+  if (!a || !a.details) return null;
+  const img = String((a.assets && a.assets.large_image) || "").replace(/^spotify:/, "");
+  return { song: a.details, artist: a.state || "", album: (a.assets && a.assets.large_text) || "", track_id: a.sync_id || "",
+    album_art_url: /^[A-Za-z0-9]{20,}$/.test(img) ? "https://i.scdn.co/image/" + img : "", timestamps: a.timestamps || {} };
+}
 function spotifyFrom(data) {
-  const s = data && data.listening_to_spotify && data.spotify;
+  const s = (data && data.listening_to_spotify && data.spotify) || spotifyActivity(data);
   if (!s || typeof s !== "object" || !s.song) return null;
   const id = TRACK_RE.test(String(s.track_id || "")) ? s.track_id : "";
   const start = Number(s.timestamps && s.timestamps.start) || 0, end = Number(s.timestamps && s.timestamps.end) || 0;

@@ -2,7 +2,7 @@
 const CONFIG = {
   discordUserId: "1356268956398387423", // string, never a number (Discord IDs exceed JS integer precision)          // your numeric Discord ID (join discord.gg/lanyard so Lanyard can see you)
   track: { src: "audio/the-kill-2.mp3", /* add your own authorized file at this path */ title: "The Kill 2", artist: "Lex Amarni & 2MuchMotion", cover: "" /* empty = fetched from Spotify oEmbed if reachable */, spotifyUrl: "https://open.spotify.com/track/1cvh28dmSvufqFqJe9LE3H" },
-  dedicationMessage: "Hay quienes pasan por la pantalla como una notificación más, y hay quienes se quedan porque de verdad le cambian el sentido a los días. Tú eres de los segundos. Gracias por las charlas que se alargaban sin planearlo, por estar siempre presente y por apoyar siempre, sin necesidad de pedir nada a cambio. Si tuviera que apartar un espacio exclusivo entre tanto ruido, pantallas y proyectos, este rincón es el que guardo para ti: un lugar permanente para alguien que vale la pena. Gracias por la amistad, Take.\n\n— Matheo"       // the dedication (same text in every language); empty = neutral placeholder. The video lives in assets/dedication.mp4
+  dedicationMessage: ""       // optional: any text here replaces the dedication in EVERY language; empty = the translated dedication (key "dedication" in T below)
 };
 /* ===== Translations: [en, es, ru, de, fr] ===== */
 const LANGS = ["en","es","ru","de","fr"];
@@ -40,6 +40,11 @@ const T = {
  tapToPlay:["tap play to start music","pulsa play para iniciar la música","нажмите play, чтобы включить музыку","Play drücken, um Musik zu starten","appuie sur lecture pour lancer la musique"],
  loadError:["couldn't load audio","no se pudo cargar el audio","не удалось загрузить аудио","Audio konnte nicht geladen werden","impossible de charger l'audio"],
  letterFor:["a letter for","una carta para","письмо для","ein Brief für","une lettre pour"],
+ dedication:["Some people pass through the screen like just another notification, and some stay because they truly change the meaning of your days. You are one of the latter. Thank you for the conversations that dragged on without planning to, for always being there, and for always supporting me without ever asking for anything in return. If I had to set aside an exclusive space among so much noise, screens and projects, this corner is the one I keep for you: a permanent place for someone who is worth it. Thank you for the friendship, Take.\n\n— Matheo",
+  "Hay quienes pasan por la pantalla como una notificación más, y hay quienes se quedan porque de verdad le cambian el sentido a los días. Tú eres de los segundos. Gracias por las charlas que se alargaban sin planearlo, por estar siempre presente y por apoyar siempre, sin necesidad de pedir nada a cambio. Si tuviera que apartar un espacio exclusivo entre tanto ruido, pantallas y proyectos, este rincón es el que guardo para ti: un lugar permanente para alguien que vale la pena. Gracias por la amistad, Take.\n\n— Matheo",
+  "Одни проходят по экрану как очередное уведомление, а другие остаются, потому что по-настоящему меняют смысл дней. Ты из вторых. Спасибо за разговоры, которые затягивались сами собой, за то, что ты всегда рядом, и за то, что всегда поддерживаешь, ничего не прося взамен. Если бы мне нужно было выделить особое место среди столького шума, экранов и проектов, этот уголок я берегу для тебя: постоянное место для человека, который этого достоин. Спасибо за дружбу, Take.\n\n— Matheo",
+  "Manche ziehen am Bildschirm vorbei wie eine weitere Benachrichtigung, und manche bleiben, weil sie den Tagen wirklich einen neuen Sinn geben. Du gehörst zu den Letzteren. Danke für die Gespräche, die sich ungeplant in die Länge zogen, dafür, dass du immer da bist, und dafür, dass du mich immer unterstützt, ohne je etwas zurückzuverlangen. Wenn ich zwischen all dem Lärm, den Bildschirmen und Projekten einen exklusiven Platz reservieren müsste, wäre diese Ecke der, den ich für dich aufbewahre: ein dauerhafter Ort für jemanden, der es wert ist. Danke für die Freundschaft, Take.\n\n— Matheo",
+  "Il y a ceux qui traversent l’écran comme une notification de plus, et ceux qui restent parce qu’ils changent vraiment le sens des journées. Tu fais partie des seconds. Merci pour les discussions qui s’éternisaient sans que personne l’ait prévu, pour ta présence constante et pour ton soutien de toujours, sans jamais rien demander en retour. Si je devais réserver un espace exclusif au milieu de tant de bruit, d’écrans et de projets, ce petit coin est celui que je garde pour toi : un lieu permanent pour quelqu’un qui en vaut la peine. Merci pour l’amitié, Take.\n\n— Matheo"],
  placeholder:["Your message goes here.","Tu mensaje va aquí.","Ваше сообщение здесь.","Deine Nachricht kommt hierher.","Ton message va ici."],
  close:["Close","Cerrar","Закрыть","Schließen","Fermer"],
  secret:["Open the letter for iTake","Abrir la carta para iTake","Открыть письмо для iTake","Brief für iTake öffnen","Ouvrir la lettre pour iTake"],
@@ -92,8 +97,14 @@ function setText(el, t){ if (el.textContent === t) return; el.textContent = t; i
 let avBad = "", bannerBad = "", spT, histT, prof = null, profFails = 0, profT;
 /* Spotify as Discord reports it (Lanyard's `spotify` object). Same source as before: nothing is invented, no Spotify API involved. */
 const TRACK_RE = /^[A-Za-z0-9]{22}$/;
+/* Fallback: the Spotify activity as Discord itself reports it (type 2 "Spotify"), used only when Lanyard's parsed `spotify` object is missing */
+function spotifyActivity(d){
+  const a = d && Array.isArray(d.activities) ? d.activities.find(x => x && x.type === 2 && (x.id === "spotify:1" || x.name === "Spotify")) : null; if (!a || !a.details) return null;
+  const img = String((a.assets && a.assets.large_image) || "").replace(/^spotify:/, "");
+  return { song: a.details, artist: a.state || "", album: (a.assets && a.assets.large_text) || "", track_id: a.sync_id || "", album_art_url: /^[A-Za-z0-9]{20,}$/.test(img) ? "https://i.scdn.co/image/" + img : "", timestamps: a.timestamps || {} };
+}
 function spotifyOf(d){
-  const s = d && d.listening_to_spotify && d.spotify; if (!s || typeof s !== "object" || !s.song) return null;
+  const s = (d && d.listening_to_spotify && d.spotify) || spotifyActivity(d); if (!s || typeof s !== "object" || !s.song) return null;
   const id = TRACK_RE.test(String(s.track_id || "")) ? s.track_id : "", st = +(s.timestamps && s.timestamps.start) || 0, en = +(s.timestamps && s.timestamps.end) || 0;
   return { id, title: String(s.song), artists: String(s.artist || "").split(";").map(x => x.trim()).filter(Boolean).join(", "), album: String(s.album || ""),
     cover: /^https:\/\//.test(s.album_art_url || "") ? s.album_art_url : "", url: id ? "https://open.spotify.com/track/" + id : "", startMs: st, endMs: en > st ? en : 0 };
@@ -268,14 +279,15 @@ document.addEventListener("pointerdown", e => { if (!lw.contains(e.target)) clos
 lm.addEventListener("focusout", e => { if (!lw.contains(e.relatedTarget)) closeLang(false); });
 function applyLang(){
   syncLang(); applyStaticText();
-  $("#l-body").textContent = CONFIG.dedicationMessage || tr("placeholder");
+  $("#l-body").textContent = CONFIG.dedicationMessage || tr("dedication");   /* re-rendered on every language change */
   renderPresence(); renderPlayer(); renderHistoryState();
 }
 const dlg = $("#letter");
 $("#secret").onclick = e => { const b = e.currentTarget; b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); dlg.showModal(); vidPlay(); }; $("#close").onclick = () => dlg.close();
 dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
 /* the dedication media is a looping, muted video (behaves like a GIF). If assets/dedication.mp4 is missing the area disappears and the text stays centred */
-const vid = $("#l-vid"); vid.onerror = () => dlg.classList.add("no-gif"); vid.onloadeddata = () => dlg.classList.remove("no-gif");
+const vid = $("#l-vid") || document.createElement("video");   /* if the element is ever missing, the rest of the page (Discord, Spotify, history) must still run */
+vid.onerror = () => dlg.classList.add("no-gif"); vid.onloadeddata = () => dlg.classList.remove("no-gif");
 const vidPlay = () => { try { const p = vid.play && vid.play(); if (p && p.catch) p.catch(() => {}); } catch(e){} }, vidStop = () => { try { vid.pause && vid.pause(); } catch(e){} };
 dlg.addEventListener("close", vidStop);
 

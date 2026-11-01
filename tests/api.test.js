@@ -32,7 +32,7 @@ function install() {
     if (url.startsWith("https://api.lanyard.rest/v1/users/")) {
       if (lan.status === 0) throw new Error("network down");
       if (lan.status !== 200) return J({ success: false }, lan.status);
-      return J({ success: true, data: { discord_user: lan.user, discord_status: "online", activities: [], listening_to_spotify: !!lan.spotify, spotify: lan.spotify } });
+      return J({ success: true, data: Object.assign({ discord_user: lan.user, discord_status: "online", activities: [], listening_to_spotify: !!lan.spotify, spotify: lan.spotify }, lan.raw || {}) });
     }
     if (url.startsWith("https://fake-redis.upstash.io")) {
       if (db.fail) throw new Error("redis down");
@@ -66,6 +66,13 @@ test("recent: new song is recorded with title, artists, album, cover, Spotify li
   assert.equal(i.url, "https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b"); assert(!isNaN(new Date(i.playedAt)));
   assert(calls.every(c => !/spotify\.com\/v1|accounts\.spotify/.test(c.url)), "no Spotify Web API / OAuth call");
   assert(!JSON.stringify(r.json).includes("REDIS_TOKEN_secret"));
+});
+test("recent: records the song from the raw Discord activity when Lanyard's parsed spotify object is missing (and ignores look-alikes)", async () => {
+  reset(); const id = "R".repeat(22);
+  lan.raw = { activities: [{ type: 2, id: "spotify:1", name: "Spotify", details: "Raw Song", state: "X; Y", sync_id: id, assets: { large_image: "spotify:ab67616d0000b27364840995fe43bb2ec73a241d", large_text: "Raw Album" }, timestamps: { start: 5_000, end: 125_000 } }], listening_to_spotify: false, spotify: null };
+  let r = await recent(); assert.equal(r.json.items.length, 1); const i = r.json.items[0]; assert.equal(i.title, "Raw Song"); assert.equal(i.artists, "X, Y"); assert.equal(i.album, "Raw Album"); assert.equal(i.url, "https://open.spotify.com/track/" + id); assert.equal(i.cover, "https://i.scdn.co/image/ab67616d0000b27364840995fe43bb2ec73a241d"); assert.equal(i.durationMs, 120000);
+  lan.raw = { activities: [{ type: 0, name: "Spotify", details: "game" }, { type: 2, name: "YouTube Music", details: "nope" }], listening_to_spotify: false, spotify: null }; r = await recent(); assert.equal(r.json.items.length, 1, "look-alikes are not recorded");
+  lan.raw = null;
 });
 test("recent: durationMs - missing/invalid timestamps and entries saved before this field existed give 0 (unknown), never a made-up value", async () => {
   reset(); const A = "A".repeat(22); let r = await play(A, "A", { timestamps: { start: 1_000_000 } }); assert.equal(r.json.items[0].durationMs, 0);
