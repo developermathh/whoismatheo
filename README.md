@@ -108,9 +108,9 @@ Yo no puedo consultar tu producción, así que no he podido confirmar cuál de e
 ## Pruebas
 
 ```
-node tests/api.test.js      # 29 pruebas: Lanyard, API de Discord y Redis SIMULADOS (registro, deduplicación, límite de 10, orden,
+node tests/api.test.js      # 34 pruebas: Lanyard, API de Discord y Redis SIMULADOS (registro, deduplicación, límite de 10, orden,
                             # persistencia tras "reiniciar", errores de red, datos incompletos, seguridad, ausencia de código de Spotify API)
-node tests/client.test.js   # 26 pruebas: script.js con DOM y WebSocket simulados (canción desde Discord, banner, insignias, carrusel,
+node tests/client.test.js   # 27 pruebas: script.js con DOM y WebSocket simulados (canción desde Discord, banner, insignias, carrusel,
                             # 5 idiomas, estados vacío/error, reproductor)
 ```
 Son pruebas **automatizadas y offline con mocks**. No demuestran que tu cuenta real funcione.
@@ -149,3 +149,11 @@ La web y el servidor leen el estado de Spotify de **Lanyard** (que lo copia de D
 - `"listening_to_spotify": false` y tu Discord tampoco lo muestra → el problema está en Discord: Ajustes → Conexiones → Spotify → activar "Mostrar Spotify como tu estado" (si pide reconectar, reconéctalo) y en Privacidad de actividad dejar activado "Compartir tu actividad". No estar en modo invisible.
 - `"listening_to_spotify": true` y la web no lo muestra → ahí sí es un fallo del sitio.
 La web también lee la actividad "Spotify" cruda de Discord (`activities`) si Lanyard no trae su objeto `spotify`. El carrusel solo se actualiza cuando alguien abre la web (o `/api/track`) mientras suena la canción.
+
+## Segunda fuente opcional: Last.fm (sin Premium, sin API de Spotify)
+Si Discord no manda tu actividad de Spotify, el servidor puede preguntar a Last.fm qué estás escuchando. Solo se usa cuando Discord no reporta Spotify; si no configuras nada, todo funciona como antes.
+1. Crea una cuenta gratis en last.fm y conecta Spotify (Ajustes → Aplicaciones → Spotify). Si va con retraso, instala en el móvil un scrobbler (por ejemplo Pano Scrobbler) para que Last.fm sepa la canción al instante.
+2. Crea una clave de API gratis en https://www.last.fm/api/account/create (solo lectura; el nombre y la descripción da igual).
+3. En Vercel → Settings → Environment Variables añade `LASTFM_API_KEY` (la clave) y `LASTFM_USER` (tu usuario de Last.fm), y vuelve a desplegar.
+Notas: Last.fm no da el id de Spotify, así que el enlace de la canción abre una búsqueda en Spotify; no da la hora de inicio, así que la tarjeta no muestra barra de progreso; la duración se pide a Last.fm solo para canciones nuevas (si no la conoce, no se muestra).
+

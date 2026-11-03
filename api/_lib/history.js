@@ -7,7 +7,7 @@ const keyOf = t => t.id || ("local:" + t.title + "|" + t.artists);
 
 /* Track length in ms, taken from the same Discord timestamps (end - start). 0 = unknown (older entries, or Discord gave no end). */
 const MAX_DURATION = 6 * 3600e3;
-const durationOf = t => { const d = (+t.endMs || 0) - (+t.startMs || 0); return t.startMs > 0 && d > 0 && d <= MAX_DURATION ? Math.round(d) : 0; };
+const durationOf = t => { const d = (+t.endMs || 0) - (+t.startMs || 0); if (t.startMs > 0 && d > 0 && d <= MAX_DURATION) return Math.round(d); return +t.durationMs >= 1000 && +t.durationMs <= MAX_DURATION ? Math.round(+t.durationMs) : 0; };   /* from Discord timestamps, or an explicit durationMs (Last.fm) */
 
 /* Returns { items, added }. items = newest first, at most MAX.
    - no track (nothing detected)                         -> history untouched

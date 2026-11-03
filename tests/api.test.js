@@ -43,11 +43,15 @@ function install() {
       if (c === "DEL") { db.data.delete(k); return J({ result: 1 }); }
       throw new Error("unexpected redis command " + c);
     }
+    if (url.startsWith("https://ws.audioscrobbler.com/2.0/")) {
+      const q = new URL(url).searchParams; if (lan.lf === "down") throw new Error("lastfm down"); if (!lan.lf) return J({ error: 6 }, 404);
+      return J(q.get("method") === "track.getinfo" ? lan.lf.info : lan.lf.recent);
+    }
     if (url.startsWith("https://discord.com/api/v10/users/")) return lan.discordApi ? lan.discordApi(url, opts) : J({}, 401);
     throw new Error("unexpected fetch " + url);
   };
 }
-const reset = () => { db.data.clear(); db.fail = false; lan.spotify = null; lan.status = 200; lan.discordApi = null; lan.user = { id: ID, username: "matheo", global_name: "Matheo", avatar: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", public_flags: 0 }; install(); };
+const reset = () => { db.data.clear(); db.fail = false; lan.spotify = null; lan.lf = null; lan.status = 200; lan.discordApi = null; lan.user = { id: ID, username: "matheo", global_name: "Matheo", avatar: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", public_flags: 0 }; install(); };
 const recent = async (env) => { const r = await call(load("recent.js", env || REDIS)); return Object.assign(r, { json: r.body ? JSON.parse(r.body) : null }); };
 const play = async (id, song, extra) => { lan.spotify = sp(id, song, extra); return recent(); };
 const ids = r => r.json.items.map(i => i.id);
@@ -73,6 +77,34 @@ test("recent: records the song from the raw Discord activity when Lanyard's pars
   let r = await recent(); assert.equal(r.json.items.length, 1); const i = r.json.items[0]; assert.equal(i.title, "Raw Song"); assert.equal(i.artists, "X, Y"); assert.equal(i.album, "Raw Album"); assert.equal(i.url, "https://open.spotify.com/track/" + id); assert.equal(i.cover, "https://i.scdn.co/image/ab67616d0000b27364840995fe43bb2ec73a241d"); assert.equal(i.durationMs, 120000);
   lan.raw = { activities: [{ type: 0, name: "Spotify", details: "game" }, { type: 2, name: "YouTube Music", details: "nope" }], listening_to_spotify: false, spotify: null }; r = await recent(); assert.equal(r.json.items.length, 1, "look-alikes are not recorded");
   lan.raw = null;
+});
+/* ===== optional second source: Last.fm ===== */
+const LF = Object.assign({ LASTFM_API_KEY: "a".repeat(32), LASTFM_USER: "matheo_fm" }, REDIS);
+const lfTrack = (o) => Object.assign({ name: "Pilé", artist: { name: "Mauvais djo", mbid: "" }, album: { "#text": "L'Undertaker" }, url: "https://www.last.fm/music/x", image: [{ size: "small", "#text": "https://lastfm.freetls.fastly.net/i/u/34s/abc.jpg" }, { size: "extralarge", "#text": "https://lastfm.freetls.fastly.net/i/u/300x300/abc.jpg" }], "@attr": { nowplaying: "true" } }, o);
+const lfSet = (track, dur) => { lan.lf = { recent: { recenttracks: { track: [track] } }, info: { track: { duration: String(dur === undefined ? 156000 : dur) } } }; };
+const lfCalls = () => calls.filter(c => c.url.startsWith("https://ws.audioscrobbler.com/"));
+test("last.fm: not configured -> never contacted (default behaviour is unchanged)", async () => { reset(); lfSet(lfTrack()); const r = await recent(); assert.equal(r.json.items.length, 0); assert.equal(lfCalls().length, 0); assert.equal(r.json.now, null); });
+test("last.fm: Discord reports no Spotify -> the song playing on Last.fm is recorded (cover, album, duration, Spotify search link) and returned as `now`", async () => {
+  reset(); lfSet(lfTrack()); const r = await recent(LF); assert.equal(r.json.items.length, 1); const i = r.json.items[0];
+  assert.equal(i.title, "Pilé"); assert.equal(i.artists, "Mauvais djo"); assert.equal(i.album, "L'Undertaker"); assert.equal(i.cover, "https://lastfm.freetls.fastly.net/i/u/300x300/abc.jpg"); assert.equal(i.durationMs, 156000);
+  assert(i.url.startsWith("https://open.spotify.com/search/") && i.url.includes(encodeURIComponent("Pilé"))); assert.equal(r.json.now.title, "Pilé"); assert.equal(r.json.now.durationMs, 156000);
+  assert(!r.body.includes("a".repeat(32)) && !r.body.includes("matheo_fm"), "the key and the Last.fm user are never sent to the browser");
+  const q = new URL(lfCalls()[0].url).searchParams; assert.equal(q.get("method"), "user.getrecenttracks"); assert.equal(q.get("user"), "matheo_fm");
+});
+test("last.fm: same song on the next request is not duplicated and the duration is not asked again", async () => {
+  reset(); lfSet(lfTrack()); await recent(LF); const n = lfCalls().length; const r = await recent(LF); assert.equal(r.json.items.length, 1); assert.equal(lfCalls().length, n + 1, "only the recent-tracks call, no track.getinfo");
+  lfSet(lfTrack({ name: "Other" })); const r2 = await recent(LF); assert.deepEqual(r2.json.items.map(i => i.title), ["Other", "Pilé"]);
+});
+test("last.fm: not 'now playing' (just a past scrobble), error, bad payload or invalid settings -> nothing recorded, history kept, no crash", async () => {
+  reset(); lfSet(lfTrack({ "@attr": undefined, date: { uts: "1" } })); let r = await recent(LF); assert.equal(r.status, 200); assert.equal(r.json.items.length, 0); assert.equal(r.json.now, null);
+  lan.lf = "down"; r = await recent(LF); assert.equal(r.status, 200); assert.equal(r.json.items.length, 0);
+  lan.lf = null; r = await recent(LF); assert.equal(r.status, 200);
+  lfSet(lfTrack()); r = await recent(Object.assign({}, LF, { LASTFM_API_KEY: "short" })); assert.equal(r.json.items.length, 0, "invalid key -> not used"); r = await recent(Object.assign({}, LF, { LASTFM_USER: "bad user!" })); assert.equal(r.json.items.length, 0, "invalid user -> not used");
+});
+test("last.fm: Discord's Spotify has priority (Last.fm is not even asked); grey placeholder cover is ignored; Lanyard down -> Last.fm still works", async () => {
+  reset(); lfSet(lfTrack({ name: "FromLastfm" })); let r = await play("S".repeat(22), "FromDiscord", {}); const before = lfCalls().length; r = await recent(LF); assert.equal(lfCalls().length, before); r = await play("S".repeat(22), "FromDiscord", {}); assert.equal(r.json.items[0].title, "FromDiscord");
+  reset(); lfSet(lfTrack({ image: [{ size: "extralarge", "#text": "https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png" }] })); r = await recent(LF); assert.equal(r.json.items[0].cover, "", "placeholder is not a cover");
+  reset(); lan.status = 0; lfSet(lfTrack()); r = await recent(LF); assert.equal(r.status, 200); assert.equal(r.json.items.length, 1); assert.equal(r.json.live, true);
 });
 test("recent: durationMs - missing/invalid timestamps and entries saved before this field existed give 0 (unknown), never a made-up value", async () => {
   reset(); const A = "A".repeat(22); let r = await play(A, "A", { timestamps: { start: 1_000_000 } }); assert.equal(r.json.items[0].durationMs, 0);

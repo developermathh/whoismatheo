@@ -76,6 +76,14 @@ test("spotify: when Lanyard's parsed `spotify` object is missing, the raw Discor
   assert.equal(p.$("#sp-song").textContent, "Raw Song"); assert.equal(p.$("#sp-song").href, "https://open.spotify.com/track/" + "T".repeat(22)); assert.equal(p.$("#sp-art").src, "https://i.scdn.co/image/ab67616d0000b27364840995fe43bb2ec73a241d");
   const q = await boot({ presence: pres({ activities: [{ type: 2, name: "Not Spotify", details: "x" }, { type: 0, name: "Spotify", details: "game" }] }), profile: NOPROF(), recent: NOREC() }); assert.notEqual(q.$("#sp-song").textContent, "x"); assert.notEqual(q.$("#sp-song").textContent, "game");
 });
+test("Spotify card falls back to the song reported by /api/recent (Last.fm on the server) when Discord shows none; Discord has priority; stale/invalid `now` is ignored", async () => {
+  const now = { title: "Now Song", artists: "X, Y", album: "Alb", cover: "https://lastfm.freetls.fastly.net/i/u/300x300/abc.jpg", url: "https://open.spotify.com/search/Now%20Song%20X" };
+  let p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })) });
+  assert(p.$("#spotify").classList.contains("playing")); assert.equal(p.$("#sp-song").textContent, "Now Song"); assert.equal(p.$("#sp-song").href, now.url); assert.equal(p.$(".sp-prog").hidden, true, "no timestamps -> no progress bar"); assert.equal(p.$("#sp-art").src, now.cover);
+  p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot({ song: "From Discord" }) }), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })) }); assert.equal(p.$("#sp-song").textContent, "From Discord");
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now: null })) }); assert(p.$("#spotify").classList.contains("idle"));
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now: Object.assign({}, now, { url: "https://evil.example/x", cover: "http://x/y.png" }) })) }); assert(p.$("#spotify").classList.contains("idle"), "a non-Spotify link is rejected");
+});
 test("current song comes from Discord presence: label, title + Spotify link, artists, album, cover, progress, indicator; no Spotify API requests", async () => {
   const p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot() }), profile: NOPROF(), recent: NOREC() });
   assert.equal(p.$("#sp-label").textContent, "listening to spotify"); assert.equal(p.$("#sp-song").textContent, "Blinding Lights"); assert.equal(p.$("#sp-song").href, "https://open.spotify.com/track/" + TID);

@@ -91,6 +91,7 @@ applyStaticText();
 const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } }), {threshold:.12}) : null;
 document.querySelectorAll(".rv").forEach(e => io ? io.observe(e) : e.classList.add("in"));
 let conn = CONFIG.discordUserId ? "connecting" : "notConfigured", pres = null;
+let apiNow = null, apiNowAt = 0;   /* fallback "playing now" from /api/recent (Last.fm on the server) when Discord reports no Spotify */
 let playerState = { blocked:false, error:false };
 
 function setText(el, t){ if (el.textContent === t) return; el.textContent = t; if (!el.dataset.rdy){ el.dataset.rdy = 1; return; } el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); }
@@ -164,7 +165,7 @@ function renderPresence(){
 /* ===== Spotify activity (from Discord): loading | playing | idle (nothing detected) | error. No data = no song shown. ===== */
 let lastSpId = null;
 function renderSpotify(){
-  const t = spotifyOf(pres), s = !pres ? (conn === "unavailable" ? "error" : "loading") : t ? "playing" : "idle", live = s === "playing", box = $("#spotify"), song = $("#sp-song"), img = $("#sp-art");
+  const t = spotifyOf(pres) || (apiNow && Date.now() - apiNowAt < 90000 ? apiNow : null), s = t ? "playing" : !pres ? (conn === "unavailable" ? "error" : "loading") : "idle", live = s === "playing", box = $("#spotify"), song = $("#sp-song"), img = $("#sp-art");
   box.classList.toggle("idle", !live); box.classList.toggle("playing", live); box.dataset.s = s;
   setText($("#sp-label"), live ? tr("listening") : s === "idle" ? tr("nothingPlaying") : s === "error" ? "Spotify · " + tr("unavailable") : tr("loading"));
   setText(song, live ? t.title : ""); if (live && t.url) song.href = t.url; else song.removeAttribute("href");
@@ -369,6 +370,7 @@ async function loadHistory(){ if (document.hidden || histBusy) return; histBusy 
   try { const r = await fetch("/api/recent", { signal: ctl.signal, headers: { Accept: "application/json" } }); if (!r.ok) throw 0; const j = await r.json();
     if (!j || !Array.isArray(j.items)) throw 0;
     renderHistory(j.items.filter(i => i && i.title && (!i.url || /^https:\/\/open\.spotify\.com\//.test(i.url))).slice(0, 10));
+    const n = j.now; apiNow = n && typeof n === "object" && n.title && (!n.url || /^https:\/\/open\.spotify\.com\//.test(n.url)) ? { id: "", title: String(n.title), artists: String(n.artists || ""), album: String(n.album || ""), cover: /^https:\/\//.test(n.cover || "") ? n.cover : "", url: n.url || "", startMs: 0, endMs: 0 } : null; apiNowAt = Date.now(); renderPresence();
   } catch(e){ if (histState !== "ok"){ histState = "error"; renderHistoryState(); } /* a transient failure keeps the last good carousel */ }
   finally { clearTimeout(to); histBusy = false; } }
 document.addEventListener("visibilitychange", () => { if (!document.hidden){ if (histState !== "ok") loadHistory(); else startHistory(); loadProfile(); } });

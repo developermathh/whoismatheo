@@ -1,4 +1,4 @@
-/* GET /api/recent  ->  { items: [{ id, title, artists, album, cover, url, playedAt, durationMs }], live }   (durationMs: 0 = unknown)   (newest first, at most 10)
+/* GET /api/recent  ->  { items: [{ id, title, artists, album, cover, url, playedAt, durationMs }], live, now }   (durationMs: 0 = unknown; now = the song playing right now or null)   (newest first, at most 10)
    Each call also checks what Discord says you are listening to and records a new play if there is one (see _lib/sync.js).
    Failure: { error: storage_not_configured | storage_unreachable | storage_error | unavailable } */
 const { sendJson, allowGet, sendError } = require("./_lib/http");
@@ -9,6 +9,6 @@ module.exports = async (req, res) => {
   if (!allowGet(req, res)) return;
   try {
     const r = await sync();
-    sendJson(res, 200, { items: publicItems(r.items), live: r.live }, "public, s-maxage=8, stale-while-revalidate=20");
+    sendJson(res, 200, { items: publicItems(r.items), live: r.live, now: r.now || null }, "public, s-maxage=8, stale-while-revalidate=20");
   } catch (e) { sendError(res, e, "api/recent"); }
 };
