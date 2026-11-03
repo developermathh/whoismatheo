@@ -84,6 +84,14 @@ test("Spotify card falls back to the song reported by /api/recent (Last.fm on th
   p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now: null })) }); assert(p.$("#spotify").classList.contains("idle"));
   p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now: Object.assign({}, now, { url: "https://evil.example/x", cover: "http://x/y.png" }) })) }); assert(p.$("#spotify").classList.contains("idle"), "a non-Spotify link is rejected");
 });
+test("activity line: while a song is playing (Discord or Last.fm fallback) it does not say 'no current activity'; with nothing playing it still does; a real activity wins", async () => {
+  const now = { title: "Now Song", artists: "X", album: "A", cover: "", url: "https://open.spotify.com/search/x" };
+  let p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })) }); assert.equal(p.$("#activity").textContent, "listening to spotify — Now Song");
+  p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot({ song: "From Discord" }) }), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#activity").textContent, "listening to spotify — From Discord");
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#activity").textContent, "no current activity");
+  p = await boot({ presence: pres({ activities: [{ type: 0, name: "Game", details: "Level 2" }] }), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })) }); assert.equal(p.$("#activity").textContent, "Game — Level 2");
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })), lang: "es" }); assert.equal(p.$("#activity").textContent, "escuchando spotify — Now Song");
+});
 test("current song comes from Discord presence: label, title + Spotify link, artists, album, cover, progress, indicator; no Spotify API requests", async () => {
   const p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot() }), profile: NOPROF(), recent: NOREC() });
   assert.equal(p.$("#sp-label").textContent, "listening to spotify"); assert.equal(p.$("#sp-song").textContent, "Blinding Lights"); assert.equal(p.$("#sp-song").href, "https://open.spotify.com/track/" + TID);

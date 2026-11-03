@@ -110,7 +110,7 @@ Yo no puedo consultar tu producción, así que no he podido confirmar cuál de e
 ```
 node tests/api.test.js      # 34 pruebas: Lanyard, API de Discord y Redis SIMULADOS (registro, deduplicación, límite de 10, orden,
                             # persistencia tras "reiniciar", errores de red, datos incompletos, seguridad, ausencia de código de Spotify API)
-node tests/client.test.js   # 27 pruebas: script.js con DOM y WebSocket simulados (canción desde Discord, banner, insignias, carrusel,
+node tests/client.test.js   # 28 pruebas: script.js con DOM y WebSocket simulados (canción desde Discord, banner, insignias, carrusel,
                             # 5 idiomas, estados vacío/error, reproductor)
 ```
 Son pruebas **automatizadas y offline con mocks**. No demuestran que tu cuenta real funcione.
@@ -156,4 +156,4 @@ Si Discord no manda tu actividad de Spotify, el servidor puede preguntar a Last.
 2. Crea una clave de API gratis en https://www.last.fm/api/account/create (solo lectura; el nombre y la descripción da igual).
 3. En Vercel → Settings → Environment Variables añade `LASTFM_API_KEY` (la clave) y `LASTFM_USER` (tu usuario de Last.fm), y vuelve a desplegar.
 Notas: Last.fm no da el id de Spotify, así que el enlace de la canción abre una búsqueda en Spotify; no da la hora de inicio, así que la tarjeta no muestra barra de progreso; la duración se pide a Last.fm solo para canciones nuevas (si no la conoce, no se muestra).
-
+- La línea de actividad de la tarjeta de Discord ya no dice "sin actividad actual" mientras suena una canción (de Discord o de Last.fm): muestra "escuchando spotify — título". Si hay otra actividad real (un juego, un programa), esa tiene prioridad.

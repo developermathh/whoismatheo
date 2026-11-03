@@ -153,7 +153,8 @@ function renderPresence(){
   const cs = acts.find(a => a.type === 4), csTxt = cs ? [(cs.emoji && !cs.emoji.id && cs.emoji.name) || "", cs.state || ""].filter(Boolean).join(" ") : "";
   setText($("#custom"), csTxt); $("#custom").hidden = !csTxt;
   const act = acts.find(a => a.type !== 4 && a.id !== "spotify:1" && a.name !== "Spotify");
-  setText($("#activity"), !d ? (conn === "unavailable" ? tr("hint") : "") : act ? act.name + (act.details ? " — " + act.details : "") : tr("noActivity"));
+  const song = currentSong();   /* Spotify is shown in its own card, but the line above it must not claim "no activity" while music is playing */
+  setText($("#activity"), !d ? (conn === "unavailable" ? tr("hint") : "") : act ? act.name + (act.details ? " — " + act.details : "") : song ? tr("listening") + " — " + song.title : tr("noActivity"));
   /* avatar: official profile (animated if it is) -> Lanyard's avatar hash; decoration only when Discord reports one */
   const lanyardAv = d && u.id && u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : "";
   const av = $("#av"), src = safeUrl(prof && (still ? prof.avatarStatic : prof.avatar)) || lanyardAv;
@@ -164,8 +165,10 @@ function renderPresence(){
 }
 /* ===== Spotify activity (from Discord): loading | playing | idle (nothing detected) | error. No data = no song shown. ===== */
 let lastSpId = null;
+/* the song playing now: Discord/Lanyard first, otherwise the one /api/recent reports (Last.fm) if it is recent */
+function currentSong(){ return spotifyOf(pres) || (apiNow && Date.now() - apiNowAt < 90000 ? apiNow : null); }
 function renderSpotify(){
-  const t = spotifyOf(pres) || (apiNow && Date.now() - apiNowAt < 90000 ? apiNow : null), s = t ? "playing" : !pres ? (conn === "unavailable" ? "error" : "loading") : "idle", live = s === "playing", box = $("#spotify"), song = $("#sp-song"), img = $("#sp-art");
+  const t = currentSong(), s = t ? "playing" : !pres ? (conn === "unavailable" ? "error" : "loading") : "idle", live = s === "playing", box = $("#spotify"), song = $("#sp-song"), img = $("#sp-art");
   box.classList.toggle("idle", !live); box.classList.toggle("playing", live); box.dataset.s = s;
   setText($("#sp-label"), live ? tr("listening") : s === "idle" ? tr("nothingPlaying") : s === "error" ? "Spotify · " + tr("unavailable") : tr("loading"));
   setText(song, live ? t.title : ""); if (live && t.url) song.href = t.url; else song.removeAttribute("href");
