@@ -64,7 +64,7 @@ test("dedication: exact text, looping muted video slot at assets/dedication.mp4 
   const dlg = html.slice(html.indexOf('<dialog id="letter"'), html.indexOf("</dialog>"));
   assert(!/<h[1-6]/.test(dlg) && !dlg.includes("l-title") && !dlg.includes("letterFor"), "no title in the dedication"); assert(dlg.includes('<video') && dlg.includes('src="assets/dedication.mp4"') && /\bmuted\b/.test(dlg) && /\bloop\b/.test(dlg) && /playsinline/.test(dlg) && dlg.includes('id="l-body"') && !dlg.includes('.gif'));
   const css = fs.readFileSync(path.join(root, "style.css"), "utf8"); assert(/\.ded-gif video\{[^}]*object-fit:contain/.test(css)); assert(/\.ded\{[^}]*grid-template-columns:1fr 1fr/.test(css)); assert(/@media\(max-width:767px\)\{[^]*\.ded\{grid-template-columns:1fr/.test(css));
-  assert(!/<section id="history" class="[^"]*\bcard\b/.test(html), "history is not a card"); assert(!html.includes("<time"));
+  assert(!/<section id="history" class="[^"]*\bcard\b/.test(html), "history is not a card"); assert(/id="act-sp"[\s\S]*<svg[\s\S]*class="eq"/.test(html) && /\.act-sp svg\{[^}]*fill:currentColor/.test(fs.readFileSync(path.join(root, "style.css"), "utf8")), "mono Spotify logo + bars in the activity line"); assert(!html.includes("<time"));
 });
 test("dedication is rendered in the active language (all 5)", async () => {
   const T = vm.runInNewContext("(" + code.match(/const T = (\{[\s\S]*?\n\});/)[1] + ")");
@@ -84,13 +84,12 @@ test("Spotify card falls back to the song reported by /api/recent (Last.fm on th
   p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now: null })) }); assert(p.$("#spotify").classList.contains("idle"));
   p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now: Object.assign({}, now, { url: "https://evil.example/x", cover: "http://x/y.png" }) })) }); assert(p.$("#spotify").classList.contains("idle"), "a non-Spotify link is rejected");
 });
-test("activity line: while a song is playing (Discord or Last.fm fallback) it does not say 'no current activity'; with nothing playing it still does; a real activity wins", async () => {
+test("activity line: while music is the only activity it shows the Spotify logo + rhythm bars (no repeated words); idle still says 'no current activity'; a real activity wins", async () => {
   const now = { title: "Now Song", artists: "X", album: "A", cover: "", url: "https://open.spotify.com/search/x" };
-  let p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })) }); assert.equal(p.$("#activity").textContent, "listening to spotify — Now Song");
-  p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot({ song: "From Discord" }) }), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#activity").textContent, "listening to spotify — From Discord");
-  p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#activity").textContent, "no current activity");
-  p = await boot({ presence: pres({ activities: [{ type: 0, name: "Game", details: "Level 2" }] }), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })) }); assert.equal(p.$("#activity").textContent, "Game — Level 2");
-  p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })), lang: "es" }); assert.equal(p.$("#activity").textContent, "escuchando spotify — Now Song");
+  let p = await boot({ presence: pres(), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })) }); assert.equal(p.$("#act-sp").hidden, false); assert.equal(p.$("#activity").textContent, ""); assert.equal(p.$("#activity").style.display, "none"); assert.equal(p.$("#sp-label").textContent, "listening to spotify", "the words appear once, in the Spotify block");
+  p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot({ song: "From Discord" }) }), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#act-sp").hidden, false); assert.equal(p.$("#activity").textContent, "");
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); assert.equal(p.$("#activity").textContent, "no current activity"); assert.equal(p.$("#act-sp").hidden, true); assert.notEqual(p.$("#activity").style.display, "none");
+  p = await boot({ presence: pres({ activities: [{ type: 0, name: "Game", details: "Level 2" }] }), profile: NOPROF(), recent: holder(resp({ items: [item(1)], now })) }); assert.equal(p.$("#activity").textContent, "Game — Level 2"); assert.equal(p.$("#act-sp").hidden, true);
 });
 test("current song comes from Discord presence: label, title + Spotify link, artists, album, cover, progress, indicator; no Spotify API requests", async () => {
   const p = await boot({ presence: pres({ listening_to_spotify: true, spotify: spot() }), profile: NOPROF(), recent: NOREC() });

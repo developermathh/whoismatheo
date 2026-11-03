@@ -211,16 +211,19 @@ body{padding-bottom:140px}
 .banner img[hidden]{display:none}
 .pf-main{min-width:0}
 /* The avatar is pulled up by the banner gap + HALF of its own height, so the banner's bottom edge always crosses its vertical centre (50% over the banner, 50% below), on desktop and on phones. It is top-aligned so the height of the name block never shifts it. */
-.pf-who{--av:88px;align-items:flex-start;margin-bottom:.7rem}
-.pf-who .avatar{width:var(--av);height:var(--av);margin-top:calc(-1 * var(--bn-gap) - var(--av) / 2);margin-left:.6rem;background:var(--card);border:4px solid var(--card);box-shadow:0 0 0 1px var(--bd)}
-.pf-who .avatar #av-fb{font-size:1.8rem}
+/* Discord profile layout: the avatar straddles the banner's bottom edge (exactly 50% over it, 50% below) at the left, and the display name + @username sit BELOW the avatar. Proportions follow Discord's profile (avatar ~55-60% of the banner height, thick ring in the card colour, status dot on the bottom-right). */
+.pf-who{--av:108px;--ring:6px;flex-direction:column;align-items:flex-start;gap:.55rem;margin:0 0 .8rem .9rem}
+.pf-who .avatar{z-index:2;width:var(--av);height:var(--av);margin-top:calc(-1 * var(--bn-gap) - var(--av) / 2);background:var(--card);border:var(--ring) solid var(--card);box-shadow:none}
+.pf-who .avatar img:not(.deco){border-radius:50%}
+.pf-who .avatar #av-fb{font-size:2rem}
+.pf-who .st{width:24px;height:24px;right:-2px;bottom:-2px;border-width:4px}
 .avatar .deco{position:absolute;inset:-12%;width:124%;height:124%;max-width:none;border-radius:0;object-fit:contain;pointer-events:none;z-index:1}
 .avatar .deco[hidden]{display:none}.avatar .st{z-index:2}
-.pf-names{min-width:0;padding-bottom:.15rem}.pf-names h2{margin:0;overflow-wrap:anywhere}
+.pf-names{min-width:0;max-width:100%;padding-bottom:.15rem}.pf-names h2{margin:0;overflow-wrap:anywhere;font-size:1.6rem;line-height:1.2}.pf-names #uname{margin-top:.1rem}
 .pf-main>p{margin:.2rem 0 0;overflow-wrap:anywhere}#custom{color:var(--tx)}
 .badges{display:flex;flex-wrap:wrap;gap:.4rem;list-style:none;margin:.2rem 0 .7rem;padding:0}.badges[hidden]{display:none}
 .badges li{border:1px solid var(--bd);border-radius:14px;overflow-wrap:anywhere;padding:.18rem .65rem;font-size:.72rem;line-height:1.3;color:var(--tx);background:color-mix(in srgb,var(--tx) 4%,transparent)}
-@media(max-width:767px){.pf-who{--av:76px}.pf-who .avatar{margin-left:.3rem}}
+@media(max-width:767px){.pf-who{--av:80px;--ring:5px;margin-left:.6rem}.pf-who .st{width:22px;height:22px}.pf-names h2{font-size:1.45rem}}
 /* ===== v11: Recently played = its own section (no box), album covers are the protagonists. Native scroll + snap (swipe), quiet arrows, dots; the page never scrolls sideways ===== */
 .hist-sec{margin:2.8rem 0 1.4rem;padding:0}
 .hist-head{align-items:center;padding-bottom:.8rem;margin-bottom:1.1rem;border-bottom:1px solid var(--bd)}
@@ -314,3 +317,8 @@ body{padding-bottom:calc(var(--player-h,108px) + 2.2rem)}
  #letter #l-body{text-align:center;font-size:.98rem;line-height:1.75}
  .ded-gif{min-height:0;height:min(72vw,320px)}
 }
+
+/* ===== v11: while music is the only activity, the activity line is just a small monochrome Spotify logo + the rhythm bars (the words "listening to spotify" appear once, in the Spotify block below) ===== */
+.act-sp{display:flex;align-items:center;gap:.55rem}.act-sp[hidden]{display:none}
+.act-sp svg{width:15px;height:15px;flex:none;fill:currentColor}
+.act-sp .eq{display:inline-flex}

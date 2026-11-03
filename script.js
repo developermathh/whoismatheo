@@ -153,8 +153,10 @@ function renderPresence(){
   const cs = acts.find(a => a.type === 4), csTxt = cs ? [(cs.emoji && !cs.emoji.id && cs.emoji.name) || "", cs.state || ""].filter(Boolean).join(" ") : "";
   setText($("#custom"), csTxt); $("#custom").hidden = !csTxt;
   const act = acts.find(a => a.type !== 4 && a.id !== "spotify:1" && a.name !== "Spotify");
-  const song = currentSong();   /* Spotify is shown in its own card, but the line above it must not claim "no activity" while music is playing */
-  setText($("#activity"), !d ? (conn === "unavailable" ? tr("hint") : "") : act ? act.name + (act.details ? " — " + act.details : "") : song ? tr("listening") + " — " + song.title : tr("noActivity"));
+  const song = currentSong();   /* Spotify has its own block below, but this line must not claim "no activity" while music is playing */
+  const iconOnly = !!(d && !act && song);   /* only music: small mono Spotify logo + rhythm bars instead of words */
+  setText($("#activity"), iconOnly ? "" : !d ? (conn === "unavailable" ? tr("hint") : "") : act ? act.name + (act.details ? " — " + act.details : "") : tr("noActivity"));
+  $("#activity").style.display = iconOnly ? "none" : ""; $("#act-sp").hidden = !iconOnly;
   /* avatar: official profile (animated if it is) -> Lanyard's avatar hash; decoration only when Discord reports one */
   const lanyardAv = d && u.id && u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : "";
   const av = $("#av"), src = safeUrl(prof && (still ? prof.avatarStatic : prof.avatar)) || lanyardAv;
