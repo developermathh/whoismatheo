@@ -97,11 +97,11 @@ El fondo oscuro con puntos es el **respaldo**: significa que el servidor no reci
 - `"bannerSource":"error"` → Discord no respondió; reintenta.
 - `"bannerSource":"ok"` y `"banner":null` → tu perfil de Discord no tiene banner. Si tienes color de acento, la tarjeta lo muestra liso, como hace Discord.
 - `"bannerSource":"ok"` y `"banner":{...}` → debe verse; si no, abre la URL de `banner.url` directamente.
-Yo no puedo consultar tu producción, así que no he podido confirmar cuál de estos casos es el tuyo. Las respuestas de `/api/profile` se cachean 5 min.
+Yo no puedo consultar tu producción, así que no he podido confirmar cuál de estos casos es el tuyo. Las respuestas de `/api/profile` se cachean 1 min.
 
 ## Banner, animación y actualización
 
-- El banner se pide a `/api/profile` (cacheado 5 min en el CDN) y la web lo recarga cada 5 min. Si cambias el banner en Discord, aparece solo, sin tocar código.
+- El banner se pide a `/api/profile` (cacheado 1 min en el CDN) y la web lo recarga cada 1 min. Si cambias el banner en Discord, aparece solo, sin tocar código.
 - Se muestra tal cual, **sin degradado ni capa oscura encima**, con la proporción 5:2 de los banners de Discord (en móvil se ve completo; en pantallas anchas se limita a 200 px de alto y se recorta con `object-fit: cover`, sin deformar). Si es GIF animado se conserva la animación; con "reducir movimiento" activado en el dispositivo se usa el fotograma estático. Si la imagen no carga, se muestra el respaldo en vez de una imagen rota.
 - Avatar, nombre y datos van debajo del banner, nunca encima del texto, para mantener la legibilidad.
 

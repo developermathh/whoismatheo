@@ -48,6 +48,6 @@ module.exports = async (req, res) => {
       bio: kvBio,
       bannerSource: off.status                                           /* ok | no_token | bad_token | error */
     };
-    sendJson(res, 200, body, "public, s-maxage=300, stale-while-revalidate=600");
+    sendJson(res, 200, body, "public, s-maxage=60, stale-while-revalidate=120");
   } catch (e) { sendError(res, e, "api/profile", "public, s-maxage=30"); }
 };

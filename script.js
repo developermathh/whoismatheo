@@ -182,12 +182,12 @@ function renderSpotify(){
     $("#sp-cur").textContent = fmt(el / 1000); $("#sp-dur").textContent = fmt(dur / 1000); $("#sp-bar").style.transform = `scaleX(${el / dur})`; if (el >= dur) clearInterval(spT); };
   upd(); spT = setInterval(upd, 1000);
 }
-/* public profile (banner, accent colour, badges, decoration): changes rarely, so it is refreshed every 5 minutes while the tab is visible */
+/* public profile (banner, accent colour, badges, decoration, bio): refreshed every 1 minute while the tab is visible (every 5 min when hidden) */
 async function loadProfile(){
   clearTimeout(profT); if (stopped) return;
-  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 10000); let next = 300000;
+  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 10000); let next = 60000;
   try { const r = await fetch("/api/profile", { signal: ctl.signal, headers: { Accept: "application/json" } }); if (!r.ok) throw 0; const j = await r.json(); if (!j || !j.id) throw 0; prof = j; profFails = 0; renderPresence(); }
-  catch(e){ profFails++; next = Math.min(300000, 15000 * Math.pow(2, profFails)); } /* on failure the last good profile stays */
+  catch(e){ profFails++; next = Math.min(60000, 15000 * Math.pow(2, profFails)); } /* on failure the last good profile stays */
   finally { clearTimeout(to); profT = setTimeout(loadProfile, document.hidden ? 300000 : next); }
 }
 let ws, hb, rt, wt, tries = 0, everLive = false, stopped = false;

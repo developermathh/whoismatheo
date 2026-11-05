@@ -121,6 +121,24 @@ test("recent: same song restarted after it ended (new play) is a new event; paus
   let r = await play(A, "A", { timestamps: { start: 1_050_000, end: 1_250_000 } }); assert.equal(r.json.items.length, 1, "resume after a pause shifts the timestamps but is the same play");
   r = await play(A, "A", { timestamps: { start: 1_260_000, end: 1_460_000 } }); assert.equal(r.json.items.length, 2, "started again after the previous play ended");
 });
+test("recent: dedup - a LONG pause then resume (Discord shifts the timestamps far past the old end) is still the same play, and a real repeat right after it is still recorded", async () => {
+  reset(); const A = "A".repeat(22); await play(A, "A", { timestamps: { start: 1_000_000, end: 1_200_000 } });
+  let r = await play(A, "A", { timestamps: { start: 1_400_000, end: 1_600_000 } }); assert.equal(r.json.items.length, 1, "resumed 3+ min later: same play");
+  r = await play(A, "A", { timestamps: { start: 1_400_000, end: 1_600_000 } }); r = await play(A, "A", { timestamps: { start: 1_300_000, end: 1_500_000 } }); assert.equal(r.json.items.length, 1, "seeking: same play");
+  r = await play(A, "A", { timestamps: { start: 1_501_000, end: 1_701_000 } }); assert.equal(r.json.items.length, 2, "started again when the previous play ended (after the seek): a real repeat");
+});
+test("recent: dedup - the same play reported by Last.fm (no id) and by Discord (with id) is ONE entry, and it gets the Spotify id/link", async () => {
+  reset(); const A = "A".repeat(22); lan.status = 0; lfSet(lfTrack({ name: "Landline", artist: { name: "Binki", mbid: "" } })); let r = await recent(LF); assert.equal(r.json.items.length, 1); assert.equal(r.json.items[0].id, "");
+  lan.status = 200; r = await play(A, "landline", { artist: "Binki" }); assert.equal(r.json.items.length, 1, "Discord after Last.fm: same song"); assert.equal(r.json.items[0].id, A); assert(r.json.items[0].url.endsWith(A));
+  lan.spotify = null; lan.status = 0; r = await recent(LF); assert.equal(r.json.items.length, 1, "Last.fm after Discord: same song");
+});
+test("recent: cleanup - duplicates already stored by older versions are merged (shown at once, saved on the next recording); real back-to-back repeats are kept", async () => {
+  reset(); const A = "A".repeat(22), B = "B".repeat(22), e = (id, s, en) => ({ id, title: "Song " + id[0], artists: "x", album: "", cover: "", url: "", playedAt: new Date().toISOString(), startMs: s, endMs: en, durationMs: en - s });
+  db.data.set("whoismatheo:recent-plays", JSON.stringify([e(A, 5_000_000, 5_200_000), e(A, 3_000_000, 3_200_000), e(A, 1_000_000, 1_200_000), e(B, 500, 900)]));
+  let r = await recent(); assert.deepEqual(ids(r), [A, B], "three scattered entries of one song collapse into one");
+  db.data.set("whoismatheo:recent-plays", JSON.stringify([e(A, 1_200_000, 1_400_000), e(A, 1_000_000, 1_200_000)]));
+  r = await recent(); assert.deepEqual(ids(r), [A, A], "a repeat that began exactly when the previous play ended is real");
+});
 test("recent: never more than 10 entries; the oldest drops out; order newest -> oldest", async () => {
   reset(); let r; for (let n = 0; n < 14; n++) r = await play(String.fromCharCode(65 + n).repeat(22), "Song " + n);
   assert.equal(r.json.items.length, 10); assert.equal(r.json.items[0].title, "Song 13"); assert.equal(r.json.items[9].title, "Song 4");
@@ -187,7 +205,7 @@ test("profile: with a bot token -> OFFICIAL API gives the real banner (animated 
   const r = await prof({ DISCORD_BOT_TOKEN: "BOT_secret_value" });
   assert.equal(r.json.bannerSource, "ok"); assert.equal(r.json.banner.animated, true); assert.equal(r.json.banner.url, `https://cdn.discordapp.com/banners/${ID}/a_${"9".repeat(32)}.gif?size=1024`); assert.equal(r.json.banner.staticUrl, `https://cdn.discordapp.com/banners/${ID}/a_${"9".repeat(32)}.png?size=1024`);
   assert.equal(r.json.accentColor, "#2b6cb0"); assert(r.json.decoration.includes("/avatar-decoration-presets/a_deco123456.png")); assert(r.json.avatar.endsWith(".gif?size=256")); assert.deepEqual(r.json.badges, ["activeDeveloper"]);
-  assert(!r.body.includes("BOT_secret_value")); assert(/s-maxage=300/.test(r.headers["cache-control"]), "cached 5 min: a changed banner shows up without touching the code");
+  assert(!r.body.includes("BOT_secret_value")); assert(/s-maxage=60/.test(r.headers["cache-control"]), "cached 1 min: a changed banner shows up without touching the code");
 });
 test("profile: static banner -> png; user without banner -> null; bad token -> bannerSource=bad_token (card falls back); bad hash rejected", async () => {
   reset(); lan.discordApi = () => J({ id: ID, username: "m", banner: "8".repeat(32), avatar: null }); let r = await prof({ DISCORD_BOT_TOKEN: "t" }); assert.equal(r.json.banner.animated, false); assert(r.json.banner.url.endsWith(".png?size=1024"));
