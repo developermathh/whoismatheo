@@ -51,11 +51,11 @@ def run(scn, lang, w, h, shot=None, musicoff=True, bottom=None, banner=True, bio
         pg.wait_for_timeout(400)
         res=pg.evaluate("""()=>{const W=innerWidth,out={};out.scrollW=document.documentElement.scrollWidth;out.bodyScrollW=document.body.scrollWidth;
           out.over=[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&(r.right>W+1||r.left<-1)&&!e.closest('#stars')&&!e.closest('.lang-menu')&&!e.closest('.hist')&&!e.closest('svg')}).slice(0,8).map(e=>e.tagName+'#'+e.id+'.'+e.className+' '+Math.round(e.getBoundingClientRect().left)+'..'+Math.round(e.getBoundingClientRect().right));
-          const pl=document.querySelector('#player').getBoundingClientRect();out.player=[Math.round(pl.top),Math.round(pl.height)];out.docH=document.documentElement.scrollHeight;
+          out.docH=document.documentElement.scrollHeight;
           const f=document.querySelector('footer p').getBoundingClientRect();out.footerBottom=Math.round(f.bottom+scrollY);
           const bn=document.querySelector('#banner').getBoundingClientRect();out.banner=[Math.round(bn.width),Math.round(bn.height)];const bi=document.querySelector('#banner-img');out.bannerImg={hidden:bi.hidden,nat:bi.naturalWidth,op:getComputedStyle(bi).opacity,disp:getComputedStyle(bi).display};
           out.ov=getComputedStyle(document.querySelector('#banner'),'::after').content;out.bio=document.querySelector('#bio')?{hidden:document.querySelector('#bio').hidden,text:document.querySelector('#bio').innerText}:null;
-          const clip=[...document.querySelectorAll('.nav a,.nav button,.meta *,.tag,#discord h2,#discord .muted,#discord .badges li,#about-text *,.row span')].filter(e=>e.scrollWidth>e.clientWidth+1&&getComputedStyle(e).overflow!=='visible'&&e.clientWidth>0).slice(0,8).map(e=>e.tagName+'#'+e.id+'.'+e.className+' '+e.scrollWidth+'>'+e.clientWidth+' "'+e.textContent.trim().slice(0,30)+'"');out.clipped=clip;return out}""")
+          const clip=[...document.querySelectorAll('.nav a,.nav button,.tag,#discord h2,#discord .muted,#discord .badges li,#about-text *,.row span')].filter(e=>e.scrollWidth>e.clientWidth+1&&getComputedStyle(e).overflow!=='visible'&&e.clientWidth>0).slice(0,8).map(e=>e.tagName+'#'+e.id+'.'+e.className+' '+e.scrollWidth+'>'+e.clientWidth+' "'+e.textContent.trim().slice(0,30)+'"');out.clipped=clip;return out}""")
         res.update(pg.evaluate("""()=>{const b=document.querySelector('#banner').getBoundingClientRect(),a=document.querySelector('.pf-who .avatar').getBoundingClientRect();
           const h=document.querySelector('#hist'),hb=h.getBoundingClientRect(),cv=h.children[0].querySelector('.cv').getBoundingClientRect();
           const vis=[...h.children].filter(li=>li.dataset.o&&Math.abs(+li.dataset.o)<=2&&getComputedStyle(li).opacity>0.9).map(li=>{const r=li.querySelector('.cv').getBoundingClientRect();return [li.dataset.o,Math.round(r.left),Math.round(r.right),Math.round(r.width)]});
@@ -78,5 +78,5 @@ if __name__=="__main__":
     for lang in ["en","fr","ru"]:
         for w,h in [(320,640),(360,740),(390,844),(430,932),(768,1024),(1280,800)]:
             r,e=run(scn,lang,w,h,shot=os.path.join(HERE,"out","%s_%s_%d.png"%(scn,lang,w)))
-            print(lang,w,'scrollW',r['scrollW'],'over',r['over'],'player',r['player'],'clipped',r['clipped'],'banner',r['banner'],r['bannerImg']['nat']); 
+            print(lang,w,'scrollW',r['scrollW'],'over',r['over'],'clipped',r['clipped'],'banner',r['banner'],r['bannerImg']['nat']); 
             if e: print("   CONSOLE:",e[:4])

@@ -1,6 +1,6 @@
 /* Offline test of script.js against a tiny fake DOM, a fake Lanyard WebSocket and mocked /api/* responses. It exercises the real browser code paths
-   (Discord presence, banner, badges, Spotify-from-Discord, carousel, languages, autoplay) but it is NOT a real browser:
-   layout, CSS rendering and the real autoplay policy are not tested. Run: node tests/client.test.js */
+   (Discord presence, banner, badges, Spotify-from-Discord, carousel, languages, favicon) but it is NOT a real browser:
+   layout and CSS rendering are not tested. Run: node tests/client.test.js */
 "use strict";
 const fs = require("fs"), path = require("path"), vm = require("vm"), assert = require("assert");
 const root = path.join(__dirname, ".."), code = fs.readFileSync(path.join(root, "script.js"), "utf8"), html = fs.readFileSync(path.join(root, "index.html"), "utf8");
@@ -51,9 +51,9 @@ const profile = (o) => resp(Object.assign({ id: ID, username: "matheo", displayN
 
 let passed = 0; const tests = []; const test = (n, f) => tests.push([n, f]);
 
-test("static: Music nav -> history section; carousel + banner elements exist; local player and mp3 intact; no Spotify Web API/OAuth in the page code", () => {
+test("static: Music nav -> history section; carousel + banner elements exist; no Spotify Web API/OAuth in the page code", () => {
   assert(html.includes('<a href="#history" data-i18n="music"></a>')); for (const id of ["history", "hist", "car-prev", "car-next", "car-dots", "banner", "banner-img", "badges", "custom", "av-deco", "spotify"]) assert(html.includes('id="' + id + '"'), "missing #" + id);
-  assert(!/api\.spotify\.com|accounts\.spotify\.com|\/api\/now|\/api\/spotify|refresh_token/.test(code)); assert(fs.existsSync(path.join(root, "audio/the-kill-2.mp3")) && code.includes('src: "audio/the-kill-2.mp3"'));
+  assert(!/api\.spotify\.com|accounts\.spotify\.com|\/api\/now|\/api\/spotify|refresh_token/.test(code));
   assert(code.includes("wss://api.lanyard.rest/socket"), "the existing Discord (Lanyard) connection is still used");
 });
 test("dedication: exact text, looping muted video slot at assets/dedication.mp4 (contain), no title; carousel is its own section (no card box)", () => {
@@ -208,21 +208,19 @@ test("languages: carousel, states and Spotify labels render in ru / de / fr / es
     assert.equal(p.$("#hist-msg").textContent, empty); assert.equal(p.$("#sp-label").textContent, listening); assert.equal(p.$("#status").textContent, dnd);
   }
 });
-test("Autoplay: attempted once on load, ONE Audio instance, plays when allowed", async () => {
-  const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), playBehavior: "resolve" });
-  assert.equal(p.audioInstances.length, 1); assert.equal(p.playCalls.n, 1); assert.equal(p.$("#p-status").textContent, "playing"); assert(p.$("#player").classList.contains("playing"));
+test("mini player removed: no player/mute/play controls in the page, no Audio object is created, no mp3 is referenced; nothing else lost (Spotify card, carousel, dedication)", async () => {
+  for (const id of ["player", "mute", "play", "volume", "seek", "p-title", "cover"]) assert(!html.includes('id="' + id + '"'), "leftover #" + id);
+  assert(!/new Audio|the-kill-2|\.mp3/.test(code), "no audio code left"); assert(!fs.existsSync(path.join(root, "audio")), "audio folder removed");
+  const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); assert.equal(p.audioInstances.length, 0); assert.equal(p.playCalls.n, 0);
+  for (const id of ["spotify", "hist", "secret", "letter", "theme", "lang"]) assert(html.includes('id="' + id + '"'), "missing #" + id);
 });
-test("Autoplay blocked (NotAllowedError): control stays enabled + visible hint; a click starts it; still one instance", async () => {
-  const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), playBehavior: "NotAllowedError" });
-  assert.equal(p.playCalls.n, 1); assert.equal(p.$("#play").disabled, false); assert(p.$("#player").classList.contains("blocked")); assert.equal(p.$("#p-status").textContent, "tap play to start music");
-  p.audioInstances[0].play = function () { p.playCalls.n++; this.paused = false; this.readyState = 4; (this._l.play || []).forEach(f => f()); this.onplaying && this.onplaying(); return Promise.resolve(); };
-  p.$("#play").onclick(); await tick(); assert.equal(p.$("#p-status").textContent, "playing"); assert.equal(p.audioInstances.length, 1); assert.equal(p.mem.music, "on");
+test("favicon: the tab icon is the Discord avatar (still image); assets/favicon.png is the first-paint fallback; Lanyard's avatar is used when /api/profile is down", async () => {
+  assert(/<link id="favicon" rel="icon"[^>]*href="assets\/favicon\.png"/.test(html) && fs.existsSync(path.join(root, "assets/favicon.png")));
+  let p = await boot({ presence: pres(), profile: holder(profile({ avatar: "https://cdn.discordapp.com/avatars/" + ID + "/a_anim.gif?size=256", avatarStatic: "https://cdn.discordapp.com/avatars/" + ID + "/still.png?size=256" })), recent: NOREC() });
+  assert.equal(p.$("#favicon").getAttribute("href"), "https://cdn.discordapp.com/avatars/" + ID + "/still.png?size=256", "still version, never the animated gif");
+  p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC() }); assert(/^https:\/\/cdn\.discordapp\.com\/avatars\//.test(p.$("#favicon").getAttribute("href") || ""), "fallback: Lanyard avatar");
+  p = await boot({ presence: pres(), profile: holder(profile({ avatarStatic: "https://evil.example/x.png", avatar: "https://evil.example/x.png" })), recent: NOREC() }); assert(!/evil/.test(p.$("#favicon").getAttribute("href") || ""), "only Discord CDN images are used");
 });
-test("Autoplay interrupted (AbortError) is not an error; a visitor who paused before (music=off) is respected", async () => {
-  let p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), playBehavior: "AbortError" }); assert.notEqual(p.$("#p-status").textContent, "couldn't load audio"); assert(!p.$("#player").classList.contains("blocked"));
-  p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), store: { music: "off" } }); assert.equal(p.playCalls.n, 0); assert.equal(p.$("#play").disabled, false);
-});
-test("language change does not touch the audio instance", async () => { const p = await boot({ presence: pres(), profile: NOPROF(), recent: NOREC(), lang: "es" }); assert.equal(p.audioInstances.length, 1); });
 
 (async () => {
   const realLog = console.log; let pass = 0;

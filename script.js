@@ -1,7 +1,6 @@
 /* ===== CONFIG: edit here ===== */
 const CONFIG = {
   discordUserId: "1356268956398387423", // string, never a number (Discord IDs exceed JS integer precision)          // your numeric Discord ID (join discord.gg/lanyard so Lanyard can see you)
-  track: { src: "audio/the-kill-2.mp3", /* add your own authorized file at this path */ title: "The Kill 2", artist: "Lex Amarni & 2MuchMotion", cover: "" /* empty = fetched from Spotify oEmbed if reachable */, spotifyUrl: "https://open.spotify.com/track/1cvh28dmSvufqFqJe9LE3H" },
   dedicationMessage: ""       // optional: any text here replaces the dedication in EVERY language; empty = the translated dedication (key "dedication" in T below)
 };
 /* ===== Translations: [en, es, ru, de, fr] ===== */
@@ -92,7 +91,6 @@ const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.
 document.querySelectorAll(".rv").forEach(e => io ? io.observe(e) : e.classList.add("in"));
 let conn = CONFIG.discordUserId ? "connecting" : "notConfigured", pres = null;
 let apiNow = null, apiNowAt = 0;   /* fallback "playing now" from /api/recent (Last.fm on the server) when Discord reports no Spotify */
-let playerState = { blocked:false, error:false };
 
 function setText(el, t){ if (el.textContent === t) return; el.textContent = t; if (!el.dataset.rdy){ el.dataset.rdy = 1; return; } el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); }
 let avBad = "", bannerBad = "", spT, histT, prof = null, profFails = 0, profT;
@@ -112,6 +110,8 @@ function spotifyOf(d){
 }
 const safeUrl = u => /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//.test(u || "") ? u : "";
 /* ===== Discord card: live presence (Lanyard WebSocket) + public profile (GET /api/profile) ===== */
+let favSrc = "";
+function setFavicon(u){ if (!u || u === favSrc) return; favSrc = u; try { const l = $("#favicon"); l.setAttribute("href", u); l.removeAttribute("type"); } catch(e){} }   /* assets/favicon.png (in the HTML) stays as the first-paint fallback */
 function renderBanner(){
   const box = $("#banner"), img = $("#banner-img"), b = prof && prof.banner;
   const src = b ? safeUrl(still ? b.staticUrl : b.url) : "", acc = prof && /^#[0-9a-f]{6}$/i.test(prof.accentColor || "") ? prof.accentColor : "";
@@ -161,6 +161,7 @@ function renderPresence(){
   const lanyardAv = d && u.id && u.avatar ? `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=128` : "";
   const av = $("#av"), src = safeUrl(prof && (still ? prof.avatarStatic : prof.avatar)) || lanyardAv;
   if (src && src !== avBad){ if (av.getAttribute("src") !== src) av.src = src; av.hidden = false; $("#av-fb").hidden = true; } else { av.hidden = true; $("#av-fb").hidden = false; }
+  if (src && src !== avBad) setFavicon(prof && prof.avatarStatic ? safeUrl(prof.avatarStatic) || src : src);   /* the tab icon is your Discord avatar (a still image, never animated) */
   const dec = safeUrl((prof && prof.decoration) || (u.avatar_decoration_data && u.avatar_decoration_data.asset ? `https://cdn.discordapp.com/avatar-decoration-presets/${u.avatar_decoration_data.asset}.png?size=160&passthrough=true` : "")), de = $("#av-deco");
   if (dec){ if (de.getAttribute("src") !== dec) de.src = dec; de.hidden = false; } else de.hidden = true;
   renderBanner(); renderBio(); renderBadges(); renderSpotify();
@@ -215,49 +216,7 @@ $("#sp-art").onerror = e => e.target.style.display = "none";
 $("#banner-img").onerror = e => { bannerBad = e.target.getAttribute("src"); renderBanner(); };
 $("#av").onerror = e => { avBad = e.target.getAttribute("src"); e.target.hidden = true; $("#av-fb").hidden = false; };
 
-/* ===== Player (single Audio instance; language/theme changes never touch it) ===== */
-const audio = new Audio(); audio.loop = true; audio.preload = "auto";
-const v0 = parseFloat(store.get("vol")); audio.volume = v0 >= 0 && v0 <= 1 ? v0 : .5; audio.muted = store.get("muted") === "1";
-let lastVol = audio.volume || .5;
-const tk = CONFIG.track, pl = $("#player"), seek = $("#seek"), vol = $("#volume"), mute = $("#mute"); let seeking = false;
 const fmt = n => isFinite(n) ? Math.floor(n / 60) + ":" + String(Math.floor(n % 60)).padStart(2, "0") : "0:00";
-const fill = el => el.style.setProperty("--p", (el.value - el.min) / (el.max - el.min) * 100 + "%");
-const usable = () => !!tk.src && !playerState.error;
-const isPlaying = () => !audio.paused && audio.readyState > 2 && !audio.error;
-const failPlay = e => { if (e && e.name === "AbortError") return; /* interrupted by a later pause/load: neither blocked nor broken */
-  if (e && e.name === "NotAllowedError") playerState.blocked = true; else playerState.error = true; renderPlayer(); };
-/* Autoplay is an ATTEMPT: the browser may refuse (NotAllowedError). Then the play button stays enabled, pulses and the "tap play" hint shows. No gesture tricks. */
-function tryAutoplay(){ if (!tk.src || store.get("music") === "off" || !audio.paused) return; try { const p = audio.play(); if (p && p.catch) p.catch(failPlay); } catch(e){ failPlay(e); } }
-if (tk.src){ audio.src = tk.src;
-  audio.onerror = () => { playerState.error = true; renderPlayer(); };
-  audio.onplaying = () => { playerState.error = false; playerState.blocked = false; renderPlayer(); }; }
-["play","pause","waiting","canplay","ended"].forEach(e => audio.addEventListener(e, renderPlayer));
-audio.onloadedmetadata = () => { seek.disabled = !isFinite(audio.duration); $("#t-dur").textContent = fmt(audio.duration); };
-audio.ontimeupdate = () => { if (isFinite(audio.duration) && !seeking){ seek.value = audio.currentTime / audio.duration; fill(seek); } $("#t-cur").textContent = fmt(audio.currentTime); };
-seek.oninput = () => { seeking = true; fill(seek); $("#t-cur").textContent = fmt(seek.value * audio.duration); };
-seek.onchange = () => { audio.currentTime = seek.value * audio.duration; seeking = false; };
-audio.addEventListener("volumechange", () => { vol.value = audio.volume; fill(vol); store.set("vol", audio.volume); store.set("muted", audio.muted ? "1" : "0"); renderMute(); });
-vol.oninput = e => { audio.volume = +e.target.value; if (audio.volume > 0){ lastVol = audio.volume; audio.muted = false; } };
-mute.onclick = () => { if (audio.muted || audio.volume === 0){ audio.muted = false; if (audio.volume < .05) audio.volume = lastVol; } else { lastVol = audio.volume; audio.muted = true; } };
-function renderMute(){ const m = audio.muted || audio.volume === 0, l = tr(m ? "unmute" : "mute"); mute.dataset.muted = m; mute.setAttribute("aria-label", l); mute.title = l; mute.disabled = !usable(); }
-function renderPlayer(){
-  const tl = $("#p-title"); setText(tl, tk.title || tr("noTrack")); if (tk.spotifyUrl && tk.title) tl.href = tk.spotifyUrl; else tl.removeAttribute("href");
-  setText($("#p-artist"), tk.artist || "");
-  $("#cover").hidden = !tk.cover; if (tk.cover && $("#cover").getAttribute("src") !== tk.cover) $("#cover").src = tk.cover;
-  pl.classList.toggle("has-src", usable()); pl.classList.toggle("playing", !audio.paused); pl.classList.toggle("blocked", playerState.blocked && audio.paused);
-  $("#play").disabled = !usable(); $("#play").setAttribute("aria-label", tr(audio.paused ? "play" : "pause"));
-  setText($("#p-status"), !tk.src ? "" : playerState.error ? tr("loadError") : isPlaying() ? tr("playing") : playerState.blocked ? tr("tapToPlay") : audio.paused ? tr("paused") : tr("loading"));
-  renderMute();
-}
-$("#cover").onerror = e => e.target.hidden = true;
-/* the floating player can grow (long FR/RU texts wrap): keep the page padding in sync so it never covers the end of the page */
-const syncPlayerH = () => document.documentElement.style.setProperty("--player-h", Math.ceil(pl.getBoundingClientRect().height || 108) + "px");
-if (typeof ResizeObserver !== "undefined") try { new ResizeObserver(syncPlayerH).observe(pl); } catch(e){}
-addEventListener("resize", syncPlayerH); syncPlayerH();
-$("#play").onclick = () => { if (audio.paused){ store.set("music", "on"); try { const p = audio.play(); if (p && p.catch) p.catch(failPlay); } catch(e){ failPlay(e); } } else { store.set("music", "off"); audio.pause(); } };
-fill(vol); vol.value = audio.volume; fill(vol);
-tryAutoplay(); /* a visitor who paused earlier (music=off) is respected */
-if (!tk.cover && tk.spotifyUrl) fetch("https://open.spotify.com/oembed?url=" + encodeURIComponent(tk.spotifyUrl)).then(r => r.ok ? r.json() : Promise.reject()).then(j => { if (j && /^https:\/\//.test(j.thumbnail_url || "")){ tk.cover = j.thumbnail_url; renderPlayer(); } }).catch(() => {});
 
 /* ===== Theme, language, letter ===== */
 let ttT; /* one shared timer: rapid clicks reset it instead of stacking */
@@ -286,7 +245,7 @@ lm.addEventListener("focusout", e => { if (!lw.contains(e.relatedTarget)) closeL
 function applyLang(){
   syncLang(); applyStaticText();
   $("#l-body").textContent = CONFIG.dedicationMessage || tr("dedication");   /* re-rendered on every language change */
-  renderPresence(); renderPlayer(); renderHistoryState();
+  renderPresence(); renderHistoryState();
 }
 const dlg = $("#letter");
 $("#secret").onclick = e => { const b = e.currentTarget; b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); dlg.showModal(); vidPlay(); }; $("#close").onclick = () => dlg.close();

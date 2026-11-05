@@ -16,7 +16,7 @@ Los ajustes visibles están al principio de `script.js` (`CONFIG`). Los cinco id
 | Parte | Archivos |
 |---|---|
 | Web | `index.html`, `style.css`, `script.js` |
-| Reproductor local | `audio/the-kill-2.mp3` (independiente de todo lo demás) |
+| Ícono de la pestaña | `assets/favicon.png` (respaldo) + tu avatar de Discord en vivo (`script.js`, `setFavicon`) |
 | Perfil público de Discord | `api/profile.js` → `GET /api/profile` |
 | Historial "Recently Played" | `api/recent.js` → `GET /api/recent` |
 | Registro opcional sin visitas | `api/track.js` → `GET /api/track` (protegido, 404 si no lo activas) |
@@ -111,7 +111,7 @@ Yo no puedo consultar tu producción, así que no he podido confirmar cuál de e
 node tests/api.test.js      # 34 pruebas: Lanyard, API de Discord y Redis SIMULADOS (registro, deduplicación, límite de 10, orden,
                             # persistencia tras "reiniciar", errores de red, datos incompletos, seguridad, ausencia de código de Spotify API)
 node tests/client.test.js   # 28 pruebas: script.js con DOM y WebSocket simulados (canción desde Discord, banner, insignias, carrusel,
-                            # 5 idiomas, estados vacío/error, reproductor)
+                            # 5 idiomas, estados vacío/error)
 ```
 Son pruebas **automatizadas y offline con mocks**. No demuestran que tu cuenta real funcione.
 
@@ -134,7 +134,7 @@ Opcional, en navegador real (Chromium con Playwright, datos simulados, sin red n
 - Sesiones privadas de Spotify no se ocultan en Discord si la actividad está visible; si la ocultas en Discord, no se detecta.
 
 ## Despliegue en Vercel
-Raíz del repo: `index.html`, `style.css`, `script.js`, `api/`, `audio/`, `vercel.json`. Framework "Other", sin build command. `api/` usa el runtime Node por defecto (sin `package.json` ni dependencias). Cada push a la rama de producción redespliega: **no hagas merge hasta haber probado la vista previa**.
+Raíz del repo: `index.html`, `style.css`, `script.js`, `api/`, `assets/`, `vercel.json`. Framework "Other", sin build command. `api/` usa el runtime Node por defecto (sin `package.json` ni dependencias). Cada push a la rama de producción redespliega: **no hagas merge hasta haber probado la vista previa**.
 
 ## Dedicatoria, avatar y carrusel (v11)
 

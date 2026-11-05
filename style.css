@@ -2,7 +2,7 @@
 [data-theme=light]{--bg:#F6F5F2;--card:#FFF;--tx:#101010;--mu:#5E5E5E;--bd:rgba(0,0,0,.14);--glow:rgba(0,0,0,.25)}
 *{box-sizing:border-box;margin:0}
 html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--tx);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:110px;overflow-x:hidden;transition:background .4s,color .4s}
+body{background:var(--bg);color:var(--tx);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:1.5rem;overflow-x:hidden;transition:background .4s,color .4s}
 .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}.small{font-size:.8rem}.muted{color:var(--mu)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 a{color:var(--mu);text-decoration:none;transition:color .2s}a:hover,a:focus-visible{color:var(--tx)}
@@ -38,7 +38,7 @@ main{max-width:1000px;margin:auto;padding:0 1.2rem}
 .who{display:flex;gap:1rem;align-items:center}
 .avatar{position:relative;width:72px;height:72px;flex:none;border:1px solid var(--bd);border-radius:50%;display:grid;place-items:center;font-size:1.6rem}
 .avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover}
-#sp-art,#cover{width:56px;height:56px;border-radius:6px;border:1px solid var(--bd);object-fit:cover}
+#sp-art{width:56px;height:56px;border-radius:6px;border:1px solid var(--bd);object-fit:cover}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--mu)}
 .dot.on,#conn-dot[data-s=live]{background:var(--tx);box-shadow:0 0 8px var(--glow)}
 #conn-dot[data-s=connecting],#conn-dot[data-s=reconnecting]{animation:tw 1s infinite}
@@ -47,10 +47,6 @@ main{max-width:1000px;margin:auto;padding:0 1.2rem}
 .st[data-s=dnd]{background:var(--card);border-color:var(--tx)}.st[data-s=offline]{background:var(--card)}
 #about-text{color:var(--mu);min-height:6rem;border-bottom:1px dashed var(--bd)}
 .geo{width:min(240px,70%);margin:auto;color:var(--tx)}
-.player{position:fixed;z-index:5;left:.6rem;right:.6rem;bottom:.6rem;max-width:520px;margin:auto;display:flex;align-items:center;gap:.8rem;padding:.6rem .8rem;background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(12px);border:1px solid var(--bd);border-radius:16px}
-.meta{flex:1;min-width:0}.meta p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.round{border-radius:50%;padding:0}.vol input{width:70px;accent-color:var(--tx)}
-@media(min-width:520px){.vol input{width:110px}}
 footer{text-align:center;padding:2rem 1rem 1rem}
 .heart{position:absolute;right:.9rem;bottom:5.4rem;background:none;border:0;color:var(--mu);opacity:.45;font-size:1.3rem;min-width:44px;min-height:44px;cursor:pointer;transition:opacity .3s}
 .heart:hover,.heart:focus-visible{opacity:1;color:var(--tx)}
@@ -95,7 +91,7 @@ nav a:hover,nav a:focus-visible,nav a:active{background-size:100% 1px}
 [data-theme=dark] .sun,[data-theme=light] .moon{opacity:0;transform:rotate(-80deg) scale(.4)}
 [data-theme=dark] .moon,[data-theme=light] .sun{opacity:1;transform:none}
 /* presence */
-.swap{display:inline-block;animation:sw .5s cubic-bezier(.2,.8,.2,1) both}.meta .swap,#name.swap,#activity.swap{display:block}
+.swap{display:inline-block;animation:sw .5s cubic-bezier(.2,.8,.2,1) both}#name.swap,#activity.swap{display:block}
 @keyframes sw{from{opacity:0;transform:translateY(5px);filter:blur(3px)}}
 #conn-text,#status{display:inline-block}
 .st,.dot{transition:background .5s,border-color .5s,box-shadow .5s}
@@ -103,17 +99,6 @@ nav a:hover,nav a:focus-visible,nav a:active{background-size:100% 1px}
 #discord[data-c=connecting] .who{animation:br 1.8s ease-in-out infinite}@keyframes br{50%{opacity:.45}}
 #discord[data-c=unavailable] .avatar,#discord[data-c=notConfigured] .avatar{opacity:.5}
 #spotify:not([hidden]){animation:rise .7s cubic-bezier(.16,.84,.24,1) both}
-/* player */
-.player{flex-wrap:wrap}.prog{flex-basis:100%;display:none;align-items:center;gap:.6rem;color:var(--mu)}.has-src .prog{display:flex}.prog input{flex:1;min-width:0}
-#play{position:relative}#play .ic{position:absolute;inset:0;margin:auto;transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .25s}
-.i-play,.i-pause{fill:currentColor;stroke:none}.i-pause,.playing .i-play{opacity:0;transform:scale(.5) rotate(-30deg)}.playing .i-pause{opacity:1;transform:none}
-.blocked #play{animation:call 2.4s ease-out infinite}@keyframes call{0%{box-shadow:0 0 0 0 var(--glow)}70%,100%{box-shadow:0 0 0 14px transparent}}
-input[type=range]{-webkit-appearance:none;appearance:none;background:none;height:24px;cursor:pointer;--p:50%}
-input[type=range]::-webkit-slider-runnable-track{height:2px;background:linear-gradient(to right,var(--tx) var(--p),var(--bd) var(--p))}
-input[type=range]::-moz-range-track{height:2px;background:var(--bd)}input[type=range]::-moz-range-progress{height:2px;background:var(--tx)}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;margin-top:-5px;border-radius:50%;background:var(--tx);transition:transform .2s}
-input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:var(--tx)}
-input[type=range]:active::-webkit-slider-thumb{transform:scale(1.35)}input[type=range]:disabled{opacity:.35;cursor:default}
 /* heart + letter */
 .heart .ic{width:22px;height:22px;margin:auto;animation:beat 7s ease-in-out infinite}
 @keyframes beat{0%,70%,100%{transform:scale(1)}76%{transform:scale(1.18)}82%{transform:scale(1)}88%{transform:scale(1.1)}}
@@ -168,15 +153,11 @@ footer p{width:fit-content;margin:0 auto}
 /* ===== Theme switch: short, light, compositor-friendly ===== */
 html.tt{--tt:.2s}
 @media(prefers-reduced-motion:reduce){html.tt{--tt:.08s}}
-html.tt body,html.tt .card,html.tt .btn,html.tt .player,html.tt dialog,html.tt .tag,html.tt .muted,html.tt #about-text,html.tt #about-text h3,html.tt footer p,html.tt .heart,html.tt nav a,html.tt .orbit,html.tt .geo,html.tt .geo-wrap{transition:background-color var(--tt) ease-out,color var(--tt) ease-out,border-color var(--tt) ease-out!important}
-.player{-webkit-backdrop-filter:none;backdrop-filter:none;background:color-mix(in srgb,var(--card) 95%,transparent)}
+html.tt body,html.tt .card,html.tt .btn,html.tt dialog,html.tt .tag,html.tt .muted,html.tt #about-text,html.tt #about-text h3,html.tt footer p,html.tt .heart,html.tt nav a,html.tt .orbit,html.tt .geo,html.tt .geo-wrap{transition:background-color var(--tt) ease-out,color var(--tt) ease-out,border-color var(--tt) ease-out!important}
 #theme .ic{transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .2s}
 .btn{touch-action:manipulation}
 
 /* ===== v7: mute button, Spotify card, history, compact nav ===== */
-#mute{position:relative;padding:0;width:44px}
-#mute .ic{position:absolute;inset:0;margin:auto;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .2s}
-#mute[data-muted=false] .i-off,#mute[data-muted=true] .i-on{opacity:0;transform:scale(.5)}
 #uname{margin-top:-.15rem}
 .art{position:relative;flex:none;width:var(--sp-art,64px);height:var(--sp-art,64px);border:1px solid var(--bd);border-radius:6px;display:grid;place-items:center;color:var(--mu);overflow:hidden}
 .art #sp-art{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:0;object-fit:cover}
@@ -187,11 +168,6 @@ html.tt body,html.tt .card,html.tt .btn,html.tt .player,html.tt dialog,html.tt .
 .sp-prog{display:flex;align-items:center;gap:.6rem;margin-top:.7rem;color:var(--mu)}.sp-prog[hidden]{display:none}
 .sp-prog i{flex:1;height:2px;background:var(--bd);position:relative;overflow:hidden;border-radius:2px}
 .sp-prog b{position:absolute;inset:0;background:var(--tx);transform-origin:left;transform:scaleX(0);transition:transform 1s linear}
-.meta a{display:block;color:var(--tx);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meta a[href]:hover,.meta a[href]:focus-visible{text-decoration:underline}
-body{padding-bottom:140px}
-.player{padding:.5rem .7rem;gap:.4rem .7rem}.prog input{height:16px}.prog{margin-top:-.15rem}
-@media(max-width:480px){.vol{display:none}}
 
 /* ===== v8: Spotify activity from the Web API + Music section ===== */
 .sp-head{display:flex;align-items:center;gap:.5rem;min-height:1.3rem}.sp-head p{margin:0}
@@ -277,17 +253,13 @@ body{padding-bottom:140px}
 }
 
 
-/* ===== v10: About Me (bio), robust wrapping, French/Russian mobile typography, player never covers content ===== */
+/* ===== v10: About Me (bio), robust wrapping, French/Russian mobile typography ===== */
 .bio{white-space:pre-line;overflow-wrap:anywhere;font-size:.85rem;line-height:1.55;color:var(--mu);margin:0 0 .8rem}.bio[hidden]{display:none}
 .bio b{color:var(--tx);font-weight:600}.bio s{opacity:.7}.bio code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;padding:0 .25em;border-radius:4px;background:var(--bd)}
 .split>*,.pf-main,.sp-info,.who>div{min-width:0}
 .card{overflow-wrap:break-word}
 .row{flex-wrap:wrap;align-items:center;row-gap:.35rem}.row>span{min-width:0}
-body{padding-bottom:calc(var(--player-h,108px) + 2.2rem)}
-.meta p,.meta a{overflow-wrap:anywhere}
 @media(max-width:560px){
- .meta p{white-space:normal;line-height:1.35}.meta a{white-space:normal;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
- .player{gap:.3rem .6rem}
  /* French and Russian are longer than English: smaller, fluid type and tighter tracking, on phones only. English stays as it was. */
  html[lang=fr] .nav nav a,html[lang=ru] .nav nav a{font-size:clamp(.72rem,3.1vw,.86rem)}
  html[lang=fr] .nav nav,html[lang=ru] .nav nav{gap:0 .4rem}
@@ -299,7 +271,6 @@ body{padding-bottom:calc(var(--player-h,108px) + 2.2rem)}
  html[lang=fr] .badges li,html[lang=ru] .badges li{font-size:.68rem}
  html[lang=fr] .pf-main>p,html[lang=ru] .pf-main>p,html[lang=fr] .sp-head p,html[lang=ru] .sp-head p{font-size:clamp(.7rem,3.1vw,.78rem)}
  html[lang=fr] #sp-song,html[lang=ru] #sp-song{font-size:clamp(.9rem,4vw,1rem)}
- html[lang=fr] .meta p,html[lang=ru] .meta p{font-size:clamp(.7rem,3.1vw,.78rem)}
  html[lang=fr] footer p,html[lang=ru] footer p{font-size:clamp(.7rem,3.1vw,.78rem)}
 }
 @media(max-width:360px){.nav nav a{font-size:clamp(.7rem,3.2vw,.8rem)}.card{padding:.85rem}.pf-who{gap:.7rem}}
