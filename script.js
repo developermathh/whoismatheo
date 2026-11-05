@@ -111,7 +111,15 @@ function spotifyOf(d){
 const safeUrl = u => /^https:\/\/(cdn\.discordapp\.com|media\.discordapp\.net)\//.test(u || "") ? u : "";
 /* ===== Discord card: live presence (Lanyard WebSocket) + public profile (GET /api/profile) ===== */
 let favSrc = "";
-function setFavicon(u){ if (!u || u === favSrc) return; favSrc = u; try { const l = $("#favicon"); l.setAttribute("href", u); l.removeAttribute("type"); } catch(e){} }   /* assets/favicon.png (in the HTML) stays as the first-paint fallback */
+function setFavicon(u){ if (!u || u === favSrc) return; favSrc = u;
+  const put = h => { try { const l = $("#favicon"); l.setAttribute("href", h); l.removeAttribute("type"); } catch(e){} };
+  put(u);   /* immediately the plain Discord image; then upgraded to a square with rounded corners drawn on a canvas (if the CDN allows it; otherwise the plain image stays). assets/favicon.png (in the HTML) is the first-paint fallback */
+  if (typeof Image === "undefined") return;
+  try { const im = new Image(); im.crossOrigin = "anonymous";
+    im.onload = () => { try { const c = document.createElement("canvas"), n = 128, r = 30; c.width = c.height = n; const x = c.getContext("2d");
+      x.beginPath(); x.moveTo(r, 0); x.arcTo(n, 0, n, n, r); x.arcTo(n, n, 0, n, r); x.arcTo(0, n, 0, 0, r); x.arcTo(0, 0, n, 0, r); x.closePath(); x.clip(); x.drawImage(im, 0, 0, n, n);
+      if (favSrc === u) put(c.toDataURL("image/png")); } catch(e){} };
+    im.src = u.replace(/size=\d+/, "size=128"); } catch(e){} }   /* the tab icon is your avatar as a rounded square, never animated */
 function renderBanner(){
   const box = $("#banner"), img = $("#banner-img"), b = prof && prof.banner;
   const src = b ? safeUrl(still ? b.staticUrl : b.url) : "", acc = prof && /^#[0-9a-f]{6}$/i.test(prof.accentColor || "") ? prof.accentColor : "";
